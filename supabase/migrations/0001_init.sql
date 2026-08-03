@@ -7,21 +7,9 @@
 
 create extension if not exists "pgcrypto";
 
--- ---------------------------------------------------------------------------
--- Helper: ownership check via workspace
--- ---------------------------------------------------------------------------
-create or replace function public.owns_workspace(ws uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.workspaces w
-    where w.id = ws and w.user_id = auth.uid()
-  );
-$$;
+-- Note: the ownership helper public.owns_workspace() references the workspaces
+-- table, so it is defined *after* that table is created (see below). Defining a
+-- SQL function that references a not-yet-existing table fails at creation time.
 
 -- ---------------------------------------------------------------------------
 -- profiles
@@ -52,6 +40,25 @@ create table public.workspaces (
   updated_at timestamptz not null default now()
 );
 create index workspaces_user_idx on public.workspaces(user_id);
+
+-- ---------------------------------------------------------------------------
+-- Helper: ownership check via workspace (defined after workspaces exists).
+-- plpgsql defers body validation, so this is also safe against ordering issues.
+-- ---------------------------------------------------------------------------
+create or replace function public.owns_workspace(ws uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.workspaces w
+    where w.id = ws and w.user_id = auth.uid()
+  );
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- workspace_config_versions (immutable)
