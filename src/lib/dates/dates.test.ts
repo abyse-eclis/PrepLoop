@@ -4,8 +4,10 @@ import {
   daysBetween,
   durationMinutes,
   formatDateKeyThai,
+  formatMinutesToTime,
   isoWeekKey,
   isValidDateString,
+  parseTimeToMinutes,
   timeToMinutes,
   toBuddhistYear,
   validateIntervals,
@@ -49,6 +51,65 @@ describe("validateIntervals", () => {
   });
   it("rejects empty", () => {
     expect(validateIntervals([]).ok).toBe(false);
+  });
+
+  it("supports cross-midnight 23:38–00:50 = 72 minutes", () => {
+    const r = validateIntervals([{ start: "23:38", end: "00:50" }]);
+    expect(r.ok).toBe(true);
+    expect(r.totalMinutes).toBe(72);
+    expect(r.details[0]!.crossesMidnight).toBe(true);
+  });
+
+  it("rejects implausible reversed range as end-before-start (not 23h)", () => {
+    const r = validateIntervals([{ start: "12:00", end: "09:13" }]);
+    expect(r.ok).toBe(false);
+  });
+
+  it("treats touching endpoints as NOT overlapping (incl. across midnight)", () => {
+    const r = validateIntervals([
+      { start: "23:00", end: "23:30" },
+      { start: "23:30", end: "00:30" },
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.totalMinutes).toBe(30 + 60);
+  });
+
+  it("rejects start equal to end", () => {
+    const r = validateIntervals([{ start: "10:00", end: "10:00" }]);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("ไม่เท่ากัน"))).toBe(true);
+  });
+
+  it("detects duplicate ranges", () => {
+    const r = validateIntervals([
+      { start: "08:00", end: "09:00" },
+      { start: "08:00", end: "09:00" },
+    ]);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("ซ้ำ"))).toBe(true);
+  });
+
+  it("reports each problem only once (no duplicated overlap message)", () => {
+    const r = validateIntervals([
+      { start: "09:00", end: "10:00" },
+      { start: "09:15", end: "09:45" },
+    ]);
+    expect(r.ok).toBe(false);
+    const overlaps = r.errors.filter((e) => e.includes("ซ้อน"));
+    expect(overlaps).toHaveLength(1);
+  });
+});
+
+describe("parseTimeToMinutes / formatMinutesToTime", () => {
+  it("parses HH:mm without locale", () => {
+    expect(parseTimeToMinutes("23:38")).toBe(1418);
+    expect(parseTimeToMinutes("00:00")).toBe(0);
+    expect(parseTimeToMinutes("12:50")).toBe(770);
+  });
+  it("formats minutes to 24h HH:mm", () => {
+    expect(formatMinutesToTime(1418)).toBe("23:38");
+    expect(formatMinutesToTime(0)).toBe("00:00");
+    expect(formatMinutesToTime(1440 + 50)).toBe("00:50"); // wraps
   });
 });
 

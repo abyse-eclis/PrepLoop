@@ -24,6 +24,26 @@ describe("detectImportType", () => {
     ).toBe("study_plan");
   });
 
+  it("detects execution_history via type marker or records[]", () => {
+    expect(
+      detectImportType({
+        schemaVersion: "1.0-reference",
+        type: "execution_history_reference",
+        records: [],
+      })
+    ).toBe("execution_history");
+    expect(detectImportType({ records: [{ date: "2026-08-01" }] })).toBe(
+      "execution_history"
+    );
+  });
+
+  it("does not confuse study_plan/learning_source with execution_history", () => {
+    expect(
+      detectImportType({ name: "p", startDate: "a", endDate: "b", days: [], records: [] })
+    ).toBe("study_plan");
+    expect(detectImportType({ courses: [], records: [] })).toBe("learning_source");
+  });
+
   it("returns null for unknown / non-object", () => {
     expect(detectImportType(null)).toBeNull();
     expect(detectImportType(42)).toBeNull();

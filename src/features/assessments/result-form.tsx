@@ -3,7 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
+import { DatePicker } from "@/components/ui/date-picker";
 import { recordAttempt } from "./actions";
 import { assessmentResult, validateAnswerCounts } from "@/lib/calculations";
 import { errorTypeEnum } from "@/lib/schemas/common";
@@ -148,7 +150,15 @@ export function ResultForm({
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {field("attemptDate", "วันที่", "date")}
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs">วันที่</Label>
+          <DatePicker
+            value={f.attemptDate}
+            onChange={(v) => setF((p) => ({ ...p, attemptDate: v }))}
+            buddhist
+            aria-label="วันที่สอบ"
+          />
+        </div>
         {field("score", "คะแนนที่ได้")}
         {field("maxScore", "คะแนนเต็ม")}
         {field("totalQuestions", "จำนวนข้อ")}
@@ -196,22 +206,22 @@ export function ResultForm({
                 )
               }
             />
-            <Select
-              value={t.errorType}
-              onChange={(e) =>
-                setTopics((p) =>
-                  p.map((x, j) =>
-                    j === i ? { ...x, errorType: e.target.value } : x
+            <div className="w-56 shrink-0">
+              <Combobox
+                value={t.errorType}
+                onValueChange={(v) =>
+                  setTopics((p) =>
+                    p.map((x, j) => (j === i ? { ...x, errorType: v ?? x.errorType } : x))
                   )
-                )
-              }
-            >
-              {Object.entries(ERROR_TYPE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </Select>
+                }
+                options={Object.entries(ERROR_TYPE_LABELS).map(([k, v]) => ({
+                  value: k,
+                  label: v,
+                }))}
+                searchable={false}
+                aria-label="ประเภทข้อผิดพลาด"
+              />
+            </div>
           </div>
         ))}
       </div>

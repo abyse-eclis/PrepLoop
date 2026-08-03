@@ -12,16 +12,26 @@ import {
 import { workspaceConfigSchema } from "@/lib/schemas/workspace-config";
 import { learningSourceCatalogSchema } from "@/lib/schemas/learning-source";
 import { studyPlanSchema } from "@/lib/schemas/study-plan";
+import { executionHistorySchema } from "@/lib/schemas/execution-history";
 import { detectImportType } from "@/lib/imports/detect";
 import {
   normalizeLearningSource,
   chunk,
 } from "@/lib/imports/learning-source-normalize";
 import {
+  normalizeExecutionHistory,
+  type HistoryRecordIssue,
+} from "@/lib/imports/execution-history-normalize";
+import {
   classifyChanges,
   type EntityImportSummary,
   type LearningSourceImportSummary,
 } from "@/lib/imports/summary";
+import {
+  classifyPgError,
+  userMessageFor,
+  type AppErrorCode,
+} from "@/lib/imports/errors";
 
 const LESSON_BATCH_SIZE = 400;
 
@@ -37,25 +47,38 @@ export interface ImportDebug {
   hint?: string;
 }
 
+export interface HistoryImportSummary {
+  created: number;
+  skippedDuplicate: number;
+  failed: number;
+  totalMinutes: number;
+  dayCount: number;
+  recordIssues: HistoryRecordIssue[];
+}
+
 export interface ImportResult {
   ok: boolean;
   issues?: ParseIssue[];
   error?: string;
+  errorCode?: AppErrorCode;
   message?: string;
   summary?: Record<string, number>;
   learningSummary?: LearningSourceImportSummary;
+  historySummary?: HistoryImportSummary;
   debug?: ImportDebug;
 }
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/** Build a structured import failure, exposing PG detail only in development. */
-function importFailure(context: ImportDebug, pgError: {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-} | null): ImportResult {
+/**
+ * Build a structured import failure. The user sees a friendly Thai message
+ * mapped from the PG error code; technical detail is logged server-side and
+ * only echoed to the client in development.
+ */
+function importFailure(
+  context: ImportDebug,
+  pgError: { code?: string; message?: string; details?: string; hint?: string } | null
+): ImportResult {
   const debug: ImportDebug = {
     ...context,
     pgCode: pgError?.code,
@@ -63,16 +86,16 @@ function importFailure(context: ImportDebug, pgError: {
     details: pgError?.details,
     hint: pgError?.hint,
   };
-  if (isDev) {
-    // eslint-disable-next-line no-console
-    console.error("[import] failure", debug);
-  }
-  const thai = `นำเข้าไม่สำเร็จที่ขั้นตอน "${context.entity ?? "ไม่ทราบ"}" — กรุณาตรวจสอบข้อมูลแล้วลองใหม่`;
+  // Structured technical log (never shown to end users in production).
+  // eslint-disable-next-line no-console
+  console.error("[import] failure", debug);
+
+  const code = classifyPgError(pgError);
+  const userMsg = `${userMessageFor(code)} (ขั้นตอน: ${context.entity ?? "ไม่ทราบ"})`;
   return {
     ok: false,
-    error: isDev
-      ? `${thai} [${debug.pgCode ?? "?"}] ${debug.pgMessage ?? ""}`
-      : thai,
+    errorCode: code,
+    error: isDev ? `${userMsg} [${debug.pgCode ?? "?"}] ${debug.pgMessage ?? ""}` : userMsg,
     debug: isDev ? debug : undefined,
   };
 }
@@ -624,6 +647,141 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
     ok: true,
     message: `นำเข้าแผนเป็นฉบับร่าง (เวอร์ชัน ${versionNumber}) — ไปที่หน้าแผนเพื่อเปิดใช้งาน`,
     summary,
+  };
+}
+
+/**
+ * Import Execution History (reference format) → study_sessions.
+ * Records are normalized to sessions, deduped within the file AND against
+ * existing rows, then inserted in one atomic statement (all-or-nothing).
+ */
+export async function importExecutionHistory(raw: string): Promise<ImportResult> {
+  await requireUser();
+  const workspace = await getActiveWorkspace();
+  if (!workspace) {
+    return { ok: false, errorCode: "AUTH_REQUIRED", error: "กรุณานำเข้า Workspace Config ก่อน" };
+  }
+  const detected = detectImportType(safeJsonParse(raw));
+  if (detected && detected !== "execution_history") {
+    return {
+      ok: false,
+      errorCode: "SCHEMA_MISMATCH",
+      error: `ข้อมูลนี้มีโครงสร้างเป็น ${IMPORT_TYPE_LABELS[detected]} แต่ประเภทที่เลือกคือ ${IMPORT_TYPE_LABELS["execution_history"]} กรุณาเปลี่ยนประเภทก่อนนำเข้า`,
+    };
+  }
+  const parsed = parseJsonWithSchema(raw, executionHistorySchema);
+  if (!parsed.ok || !parsed.data) {
+    return { ok: false, errorCode: "VALIDATION_ERROR", issues: parsed.issues };
+  }
+
+  const norm = normalizeExecutionHistory(parsed.data);
+  if (norm.sessions.length === 0) {
+    return {
+      ok: false,
+      errorCode: "VALIDATION_ERROR",
+      error: "ไม่มี session ที่นำเข้าได้จากไฟล์นี้",
+      historySummary: {
+        created: 0,
+        skippedDuplicate: norm.duplicatesInFile,
+        failed: norm.issues.length,
+        totalMinutes: 0,
+        dayCount: 0,
+        recordIssues: norm.issues,
+      },
+    };
+  }
+
+  const supabase = await createServerSupabase();
+
+  // Resolve plan-item external ids -> db ids (for linkage) in one query.
+  const externalIds = Array.from(
+    new Set(norm.sessions.map((s) => s.planItemExternalId).filter((v): v is string => !!v))
+  );
+  const planItemIdByExternal = new Map<string, string>();
+  if (externalIds.length > 0) {
+    const { data: items } = await supabase
+      .from("study_plan_items")
+      .select("id, stable_external_id")
+      .eq("workspace_id", workspace.id)
+      .in("stable_external_id", externalIds);
+    for (const it of (items as Array<{ id: string; stable_external_id: string }> | null) ?? []) {
+      planItemIdByExternal.set(it.stable_external_id, it.id);
+    }
+  }
+
+  // Dedup against existing sessions (same date+start+end).
+  const dates = Array.from(new Set(norm.sessions.map((s) => s.sessionDate)));
+  const existingKeys = new Set<string>();
+  const { data: existingSessions } = await supabase
+    .from("study_sessions")
+    .select("session_date, start_time, end_time, subject")
+    .eq("workspace_id", workspace.id)
+    .in("session_date", dates);
+  for (const s of (existingSessions as Array<{ session_date: string; start_time: string | null; end_time: string | null; subject: string | null }> | null) ?? []) {
+    existingKeys.add(`${s.session_date}|${s.start_time ?? ""}|${s.end_time ?? ""}|${s.subject ?? ""}`);
+  }
+
+  const rows: Array<Record<string, unknown>> = [];
+  let skippedDuplicate = norm.duplicatesInFile;
+  for (const s of norm.sessions) {
+    const existKey = `${s.sessionDate}|${s.startTime ?? ""}|${s.endTime ?? ""}|${s.subject ?? ""}`;
+    if (existingKeys.has(existKey)) {
+      skippedDuplicate++;
+      continue;
+    }
+    rows.push({
+      workspace_id: workspace.id,
+      plan_item_id: s.planItemExternalId
+        ? planItemIdByExternal.get(s.planItemExternalId) ?? null
+        : null,
+      subject: s.subject,
+      session_date: s.sessionDate,
+      start_time: s.startTime,
+      end_time: s.endTime,
+      duration_minutes: s.durationMinutes,
+      status: s.status,
+      actual_lesson_from: s.lessonFrom,
+      actual_lesson_to: s.lessonTo,
+      note: s.note,
+    });
+  }
+
+  let created = 0;
+  if (rows.length > 0) {
+    // Single atomic insert — all rows or none.
+    const { error } = await supabase.from("study_sessions").insert(rows);
+    if (error) {
+      return importFailure(
+        { entity: "study sessions", table: "study_sessions", rowCount: rows.length },
+        error
+      );
+    }
+    created = rows.length;
+  }
+
+  const summary = {
+    sessions: created,
+    days: norm.dayCount,
+    totalMinutes: norm.totalMinutes,
+  };
+  await recordImport(workspace.id, "execution_history", summary);
+
+  revalidatePath("/today");
+  revalidatePath("/history");
+  revalidatePath("/progress");
+  revalidatePath("/imports");
+  return {
+    ok: true,
+    message: `นำเข้าประวัติการเรียนสำเร็จ: ${created} sessions (${norm.dayCount} วัน)`,
+    summary,
+    historySummary: {
+      created,
+      skippedDuplicate,
+      failed: norm.issues.length,
+      totalMinutes: norm.totalMinutes,
+      dayCount: norm.dayCount,
+      recordIssues: norm.issues,
+    },
   };
 }
 
