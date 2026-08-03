@@ -9,6 +9,12 @@ export function detectImportType(value: unknown): ImportType | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const obj = value as Record<string, unknown>;
 
+  // Execution history: explicit type marker, or a records[] array.
+  if (obj.type === "execution_history_reference") return "execution_history";
+  if (Array.isArray(obj.records) && !("days" in obj) && !("courses" in obj)) {
+    return "execution_history";
+  }
+
   // Study plan: has days[] plus a start/end range.
   if (Array.isArray(obj.days) && "startDate" in obj && "endDate" in obj) {
     return "study_plan";

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { PlanItem } from "@/types/db";
 import { activityLabel } from "@/lib/status";
-import { Select } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { formatDateKeyThai } from "@/lib/dates";
 
 type Grouping = "day" | "week" | "month";
@@ -44,39 +44,45 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        <Select
-          value={grouping}
-          onChange={(e) => setGrouping(e.target.value as Grouping)}
-          className="w-auto"
-        >
-          <option value="day">รายวัน</option>
-          <option value="week">รายสัปดาห์</option>
-          <option value="month">รายเดือน</option>
-        </Select>
-        <Select
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="w-auto"
-        >
-          <option value="">ทุกวิชา</option>
-          {subjects.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={activity}
-          onChange={(e) => setActivity(e.target.value)}
-          className="w-auto"
-        >
-          <option value="">ทุกกิจกรรม</option>
-          {activities.map((a) => (
-            <option key={a} value={a}>
-              {activityLabel(a)}
-            </option>
-          ))}
-        </Select>
+        <div className="w-36">
+          <Combobox
+            value={grouping}
+            onValueChange={(v) => setGrouping((v as Grouping) ?? "day")}
+            options={[
+              { value: "day", label: "รายวัน" },
+              { value: "week", label: "รายสัปดาห์" },
+              { value: "month", label: "รายเดือน" },
+            ]}
+            searchable={false}
+            aria-label="การจัดกลุ่ม"
+          />
+        </div>
+        <div className="w-40">
+          <Combobox
+            value={subject || null}
+            onValueChange={(v) => setSubject(v ?? "")}
+            options={[
+              { value: "", label: "ทุกวิชา" },
+              ...subjects.map((s) => ({ value: s, label: s })),
+            ]}
+            placeholder="ทุกวิชา"
+            searchable={subjects.length > 8}
+            aria-label="กรองตามวิชา"
+          />
+        </div>
+        <div className="w-40">
+          <Combobox
+            value={activity || null}
+            onValueChange={(v) => setActivity(v ?? "")}
+            options={[
+              { value: "", label: "ทุกกิจกรรม" },
+              ...activities.map((a) => ({ value: a, label: activityLabel(a) })),
+            ]}
+            placeholder="ทุกกิจกรรม"
+            searchable={false}
+            aria-label="กรองตามกิจกรรม"
+          />
+        </div>
       </div>
 
       {groups.length === 0 ? (

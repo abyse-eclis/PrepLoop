@@ -3,23 +3,34 @@ import { workspaceConfigSchema } from "./workspace-config";
 import { learningSourceCatalogSchema } from "./learning-source";
 import { studyPlanSchema } from "./study-plan";
 import { recoveryPlanSchema } from "./recovery";
+import { executionHistorySchema } from "./execution-history";
 
 export * from "./common";
 export * from "./workspace-config";
 export * from "./learning-source";
 export * from "./study-plan";
 export * from "./recovery";
+export * from "./execution-history";
 
 export type ImportType =
   | "workspace_config"
   | "learning_source"
-  | "study_plan";
+  | "study_plan"
+  | "execution_history";
 
 export const IMPORT_TYPE_LABELS: Record<ImportType, string> = {
   workspace_config: "Workspace Config",
   learning_source: "Learning Source Catalog",
   study_plan: "Full Study Plan",
+  execution_history: "Execution History (ประวัติการเรียน)",
 };
+
+export const IMPORT_TYPES: ImportType[] = [
+  "workspace_config",
+  "learning_source",
+  "study_plan",
+  "execution_history",
+];
 
 export function schemaForImportType(type: ImportType): z.ZodTypeAny {
   switch (type) {
@@ -29,6 +40,8 @@ export function schemaForImportType(type: ImportType): z.ZodTypeAny {
       return learningSourceCatalogSchema;
     case "study_plan":
       return studyPlanSchema;
+    case "execution_history":
+      return executionHistorySchema;
   }
 }
 

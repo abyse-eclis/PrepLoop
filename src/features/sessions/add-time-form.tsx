@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { TimePicker24h } from "@/components/ui/time-picker";
 import { addTimeIntervals } from "./actions";
 import { validateIntervals } from "@/lib/dates";
 import { useRouter } from "next/navigation";
@@ -66,40 +67,49 @@ export function AddTimeForm({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-medium">เพิ่มเวลาเรียน (กรอกเอง)</p>
-      {intervals.map((iv, idx) => (
-        <div key={idx} className="flex items-end gap-2">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">เริ่ม</Label>
-            <Input
-              type="time"
-              value={iv.start}
-              onChange={(e) => update(idx, "start", e.target.value)}
-              className="w-32"
-            />
+      <p className="text-xs text-muted-foreground">
+        เวลาแบบ 24 ชั่วโมง (เช่น 23:38) · รองรับช่วงข้ามคืน เช่น 23:38–00:50
+      </p>
+      {intervals.map((iv, idx) => {
+        const one =
+          iv.start && iv.end ? validateIntervals([iv]) : null;
+        const crosses = one?.details[0]?.crossesMidnight ?? false;
+        return (
+          <div key={idx} className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">เริ่ม</Label>
+              <TimePicker24h
+                value={iv.start}
+                onChange={(v) => update(idx, "start", v)}
+                aria-label="เวลาเริ่ม"
+              />
+            </div>
+            <span className="pb-2">–</span>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">สิ้นสุด</Label>
+              <TimePicker24h
+                value={iv.end}
+                onChange={(v) => update(idx, "end", v)}
+                aria-label="เวลาสิ้นสุด"
+              />
+            </div>
+            {crosses ? (
+              <span className="pb-2 text-xs text-yellow-300">สิ้นสุดวันถัดไป</span>
+            ) : null}
+            {intervals.length > 1 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setIntervals((prev) => prev.filter((_, i) => i !== idx))
+                }
+              >
+                ลบ
+              </Button>
+            ) : null}
           </div>
-          <span className="pb-2">–</span>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">สิ้นสุด</Label>
-            <Input
-              type="time"
-              value={iv.end}
-              onChange={(e) => update(idx, "end", e.target.value)}
-              className="w-32"
-            />
-          </div>
-          {intervals.length > 1 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setIntervals((prev) => prev.filter((_, i) => i !== idx))
-              }
-            >
-              ลบ
-            </Button>
-          ) : null}
-        </div>
-      ))}
+        );
+      })}
 
       <div>
         <Button
@@ -122,16 +132,25 @@ export function AddTimeForm({
         />
       </div>
 
-      {preview ? (
-        preview.ok ? (
-          <p className="text-sm text-primary">
-            รวมทั้งหมด {preview.totalMinutes} นาที
-          </p>
-        ) : (
-          <p className="text-sm text-destructive">{preview.errors.join("; ")}</p>
-        )
+      {preview && preview.ok ? (
+        <p className="text-sm text-primary">
+          รวมทั้งหมด {preview.totalMinutes} นาที
+        </p>
       ) : null}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {/* One error per problem, from a single source (client preview first,
+          else the server error) — never both, so nothing is shown twice. */}
+      {(() => {
+        const messages =
+          preview && !preview.ok ? preview.errors : error ? [error] : [];
+        if (messages.length === 0) return null;
+        return (
+          <ul className="space-y-0.5 text-sm text-destructive">
+            {messages.map((m, i) => (
+              <li key={i}>• {m}</li>
+            ))}
+          </ul>
+        );
+      })()}
 
       <div className="flex gap-2">
         <Button size="sm" onClick={submit} disabled={pending}>
