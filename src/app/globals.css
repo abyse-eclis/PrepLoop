@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Dark-only theme */
+  --background: 222 22% 8%;
+  --foreground: 210 20% 92%;
+  --card: 222 20% 11%;
+  --card-foreground: 210 20% 92%;
+  --primary: 199 89% 55%;
+  --primary-foreground: 222 40% 10%;
+  --secondary: 222 16% 18%;
+  --secondary-foreground: 210 20% 92%;
+  --muted: 222 16% 16%;
+  --muted-foreground: 215 15% 62%;
+  --accent: 222 16% 20%;
+  --accent-foreground: 210 20% 92%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 222 16% 20%;
+  --input: 222 16% 20%;
+  --ring: 199 89% 55%;
+  --radius: 0.6rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Status color tokens (consistent across the app) */
+.status-not_started { background: hsl(215 15% 30% / 0.25); color: hsl(215 15% 72%); }
+.status-studying    { background: hsl(199 89% 45% / 0.20); color: hsl(199 89% 70%); }
+.status-paused      { background: hsl(38 92% 50% / 0.18);  color: hsl(38 92% 66%); }
+.status-completed   { background: hsl(142 60% 45% / 0.20); color: hsl(142 60% 66%); }
+.status-incomplete  { background: hsl(0 72% 55% / 0.18);   color: hsl(0 80% 72%); }
+.status-needs_review{ background: hsl(280 60% 60% / 0.18); color: hsl(280 70% 76%); }
+.status-recovery    { background: hsl(24 90% 55% / 0.18);  color: hsl(24 90% 68%); }
+.status-cancelled   { background: hsl(215 12% 40% / 0.18); color: hsl(215 12% 60%); text-decoration: line-through; }
+
+.scroll-x { overflow-x: auto; }
