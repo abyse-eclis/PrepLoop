@@ -85,10 +85,11 @@ npm run build       # production build
 
 ### Storage Setup
 
-- Bucket ชื่อ `study-sources` (private) ถูกสร้างโดย `0003_storage.sql`
-- อัปโหลดผ่าน server action ที่ validate MIME + size และ sanitize ชื่อไฟล์
-- path = `{workspace_id}/{uuid}-{filename}` — storage policy อนุญาตเฉพาะเจ้าของ workspace
-- เปิดไฟล์ผ่าน signed URL อายุ 10 นาที
+- Bucket ชื่อ `study-sources` (private) ถูกสร้างโดย `0003_storage.sql` และ hardened เพิ่มใน `0004_source_files.sql`
+- อัปโหลดหลายไฟล์พร้อมกันผ่าน server action ที่ validate MIME + นามสกุล + size, คำนวณ SHA-256 (dedupe เนื้อหาซ้ำ) และ cleanup object หาก DB insert ล้มเหลว
+- storage key = `workspaces/{workspaceId}/learning-sources/{uuid}.{ext}` (ไม่ใช้ชื่อไฟล์ผู้ใช้เป็น key) — เก็บ `original_file_name`/`display_name` ไว้ในฐานข้อมูลเพื่อแสดงผล
+- storage RLS ดึง workspace id จาก path ด้วย `storage_workspace_id()` และตรวจ `owns_workspace()`
+- เปิด/ดาวน์โหลดไฟล์ผ่าน signed URL อายุ 10 นาที
 
 ### RLS Note
 
