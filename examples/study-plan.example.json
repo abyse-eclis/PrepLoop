@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "1.0",
+  "name": "TCAS70 Demo Plan V1",
+  "description": "แผนตัวอย่าง 7 วัน (1–7 ส.ค. 2026)",
+  "startDate": "2026-08-01",
+  "endDate": "2026-08-07",
+  "generatedBy": "chatgpt",
+  "changeReason": "Initial imported plan",
+  "days": [
+    {
+      "date": "2026-08-01",
+      "targetMinutes": 480,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-08-01-k001-001",
+          "subject": "MATHEMATICS",
+          "courseCode": "K001",
+          "lessonFrom": "001",
+          "lessonTo": "012",
+          "activityType": "course",
+          "targetMinutes": 120,
+          "priority": "high",
+          "instructions": "เรียนตามลำดับคอร์สและทำโจทย์ที่อยู่ในคลิป"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-02",
+      "targetMinutes": 480,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-08-02-l029-025",
+          "subject": "TGAT1",
+          "courseCode": "L029",
+          "lessonFrom": "025",
+          "lessonTo": "025",
+          "activityType": "course",
+          "targetMinutes": 60,
+          "priority": "medium",
+          "instructions": "เรียนคลิป 025 และสรุปสิ่งที่เข้าใจ"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-03",
+      "targetMinutes": 480,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-08-03-k001-013",
+          "subject": "MATHEMATICS",
+          "courseCode": "K001",
+          "lessonFrom": "013",
+          "lessonTo": "013",
+          "activityType": "course",
+          "targetMinutes": 60,
+          "priority": "high",
+          "instructions": "เรียนคลิปถัดจากความคืบหน้าปัจจุบัน"
+        },
+        {
+          "stableExternalId": "2026-08-03-k001-review",
+          "subject": "MATHEMATICS",
+          "courseCode": "K001",
+          "lessonFrom": "002",
+          "lessonTo": "012",
+          "activityType": "review",
+          "targetMinutes": 45,
+          "priority": "high",
+          "instructions": "ทบทวนโจทย์เดิมและทำข้อที่เคยผิดใหม่"
+        },
+        {
+          "stableExternalId": "2026-08-03-math-quiz",
+          "subject": "MATHEMATICS",
+          "courseCode": "K001",
+          "lessonFrom": "001",
+          "lessonTo": "012",
+          "activityType": "quiz",
+          "assessmentSourceId": "assessment-math1-set1",
+          "targetMinutes": 45,
+          "priority": "medium",
+          "instructions": "ทำแบบทดสอบย่อยเพื่อตรวจความเข้าใจ"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-04",
+      "targetMinutes": 420,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-08-04-tgat1",
+          "subject": "TGAT1",
+          "courseCode": "L029",
+          "lessonFrom": "025",
+          "lessonTo": "025",
+          "activityType": "review",
+          "targetMinutes": 60,
+          "priority": "medium",
+          "instructions": "ทบทวน grammar และทำโจทย์เพิ่ม"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-05",
+      "targetMinutes": 420,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-08-05-math-mock",
+          "subject": "MATHEMATICS",
+          "activityType": "mock",
+          "assessmentSourceId": "assessment-math1-set1",
+          "targetMinutes": 90,
+          "priority": "high",
+          "instructions": "ทำข้อสอบเสมือนจริงจับเวลา"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-06",
+      "targetMinutes": 360,
+      "napTargetMinutes": 30,
+      "items": [
+        {
+          "stableExternalId": "2026-08-06-review-week",
+          "subject": "MATHEMATICS",
+          "activityType": "review",
+          "targetMinutes": 60,
+          "priority": "medium",
+          "instructions": "ทบทวนรวมประจำสัปดาห์"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-07",
+      "targetMinutes": 300,
+      "napTargetMinutes": 30,
+      "items": [
+        {
+          "stableExternalId": "2026-08-07-rest",
+          "subject": "MATHEMATICS",
+          "activityType": "rest",
+          "targetMinutes": 0,
+          "priority": "low",
+          "instructions": "พักและสรุปบทเรียนสั้น ๆ"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "parentPlanVersionId": "plan-version-1",
+  "effectiveFrom": "2026-08-04",
+  "generatedBy": "claude_recovery",
+  "reason": "ทำเวลาเรียนและงานทบทวนไม่ครบตามแผน",
+  "evidence": [
+    { "type": "daily_completion", "value": 62, "threshold": 70 }
+  ],
+  "weakSubjects": ["MATHEMATICS"],
+  "weakTopics": [],
+  "changes": [
+    {
+      "action": "postpone",
+      "sourceItemExternalId": "2026-08-03-k001-review",
+      "reason": "งานทบทวนยังไม่เสร็จ"
+    }
+  ],
+  "days": [
+    {
+      "date": "2026-08-04",
+      "targetMinutes": 480,
+      "items": [
+        {
+          "stableExternalId": "recovery-2026-08-04-k001",
+          "subject": "MATHEMATICS",
+          "courseCode": "K001",
+          "lessonFrom": "002",
+          "lessonTo": "012",
+          "activityType": "review",
+          "targetMinutes": 45,
+          "priority": "high",
+          "instructions": "ทำข้อที่เคยผิดใหม่และอธิบายวิธีคิดโดยไม่เปิดเฉลย"
+        }
+      ]
+    }
+  ],
+  "addedReviews": [],
+  "postponedItems": ["2026-08-03-k001-review"],
+  "reducedItems": [],
+  "removedLowPriorityItems": [],
+  "riskNotes": []
+}

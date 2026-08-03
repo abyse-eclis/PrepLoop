@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0",
+  "catalogName": "TCAS70 Learning Sources (ตัวอย่าง)",
+  "subjects": ["MATHEMATICS", "TGAT1"],
+  "courses": [
+    {
+      "id": "course-k001",
+      "code": "K001",
+      "name": "ปรับพื้นคณิตพิชิต ม.ปลาย",
+      "subject": "MATHEMATICS",
+      "totalLessons": 13,
+      "sections": [
+        { "id": "k001-sec-1", "name": "พื้นฐานพีชคณิต", "order": 1 }
+      ],
+      "lessons": [
+        { "id": "k001-001", "lessonNumber": "001", "title": "คลิป 001", "order": 1 },
+        { "id": "k001-012", "lessonNumber": "012", "title": "คลิป 012", "order": 12 },
+        {
+          "id": "k001-013",
+          "lessonNumber": "013",
+          "title": "คลิป 013",
+          "order": 13,
+          "prerequisiteLessonIds": ["k001-012"]
+        }
+      ]
+    },
+    {
+      "id": "course-l029",
+      "code": "L029",
+      "name": "พิชิต TGAT1",
+      "subject": "TGAT1",
+      "totalLessons": 1,
+      "lessons": [
+        {
+          "id": "l029-025",
+          "lessonNumber": "025",
+          "title": "Essential English Grammar",
+          "order": 25
+        }
+      ]
+    }
+  ],
+  "sourceFiles": [
+    {
+      "id": "file-math1-set1",
+      "title": "แนวข้อสอบ (ตัวอย่าง metadata ไม่มีไฟล์จริง)",
+      "fileType": "application/pdf",
+      "storagePath": null,
+      "uploadRequired": true
+    }
+  ],
+  "assessmentSources": [
+    {
+      "id": "assessment-math1-set1",
+      "type": "mock",
+      "subject": "MATHEMATICS",
+      "title": "A-Level คณิตศาสตร์ 1 ชุดที่ 1 (ตัวอย่าง)",
+      "sourceType": "uploaded_file",
+      "sourceFileId": "file-math1-set1",
+      "courseCode": "K001",
+      "lessonFrom": "001",
+      "lessonTo": "012",
+      "requiredCompletedLessons": [],
+      "coveredTopics": ["พีชคณิตพื้นฐาน"],
+      "questionPages": { "from": 1, "to": 10 },
+      "answerPages": { "from": 11, "to": 12 },
+      "solutionPages": { "from": 13, "to": 20 },
+      "passingPercentage": 70,
+      "requiresManualVerification": true
+    }
+  ]
+}

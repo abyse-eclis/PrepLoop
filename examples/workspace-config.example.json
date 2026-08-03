@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "workspace": {
+    "name": "แผนติว TCAS70",
+    "timezone": "Asia/Bangkok",
+    "startDate": "2026-08-01",
+    "dailyTargetMinutes": 480,
+    "napTargetMinutes": { "min": 30, "max": 60 }
+  },
+  "studyConstraints": {
+    "flexibleSchedule": true,
+    "preferredDeepFocusPeriod": "late_night",
+    "avoidHeavyMathInMorning": true,
+    "maxHeavyStudyBlockMinutes": 60,
+    "doNotCarryAllPendingWorkForward": true
+  },
+  "successRules": {
+    "timeCompletionTargetPercent": 80,
+    "taskCompletionTargetPercent": 80,
+    "defaultPassingPercent": 70
+  },
+  "recoveryRules": {
+    "dailyCompletionTriggerPercent": 70,
+    "maximumDailyMinutes": 480,
+    "overdueReviewTriggerCount": 5,
+    "failedAssessmentTrigger": true
+  },
+  "examEvents": [
+    {
+      "id": "exam-tgat",
+      "name": "TGAT",
+      "examType": "TGAT",
+      "date": "2027-01-30",
+      "sourceUrl": "https://example.com/dashboard",
+      "verifiedAt": "2026-08-03"
+    }
+  ],
+  "scoreTargets": [
+    { "examType": "TGAT", "targetPercentage": 80 }
+  ]
+}
