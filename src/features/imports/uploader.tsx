@@ -14,14 +14,20 @@ import {
 } from "@/lib/upload-constants";
 import { parseFileName } from "@/lib/files";
 import { createClient } from "@/lib/supabase/client";
-import { prepareUpload, finalizeUpload } from "./upload-actions";
+import {
+  prepareUpload,
+  finalizeUpload,
+  registerReferenceFile,
+} from "./upload-actions";
 
 type ItemStatus =
   | "pending"
+  | "reference_pending"
   | "invalid"
   | "hashing"
   | "uploading"
   | "uploaded"
+  | "reference_saved"
   | "skipped_duplicate"
   | "failed";
 
@@ -34,20 +40,24 @@ interface FileItem {
 
 const STATUS_LABEL: Record<ItemStatus, string> = {
   pending: "รออัปโหลด",
+  reference_pending: "ใหญ่เกินลิมิต — จะบันทึกเป็นอ้างอิง",
   invalid: "ไม่ผ่านการตรวจสอบ",
   hashing: "กำลังตรวจสอบ…",
   uploading: "กำลังอัปโหลด…",
   uploaded: "อัปโหลดสำเร็จ",
+  reference_saved: "บันทึกชื่อไฟล์ (อ้างอิง)",
   skipped_duplicate: "ข้าม (มีไฟล์เดิมแล้ว)",
   failed: "อัปโหลดไม่สำเร็จ",
 };
 
 const STATUS_CLASS: Record<ItemStatus, string> = {
   pending: "text-muted-foreground",
+  reference_pending: "text-yellow-300",
   invalid: "text-destructive",
   hashing: "text-primary",
   uploading: "text-primary",
   uploaded: "text-primary",
+  reference_saved: "text-yellow-300",
   skipped_duplicate: "text-yellow-300",
   failed: "text-destructive",
 };
@@ -56,21 +66,29 @@ function keyOf(f: File): string {
   return `${f.name}::${f.size}::${f.lastModified}`;
 }
 
-function validate(file: File): { ok: boolean; message?: string } {
+interface ValidateResult {
+  status: "pending" | "reference_pending" | "invalid";
+  message?: string;
+}
+
+function validate(file: File): ValidateResult {
   const mime = file.type;
   if (!isAllowedMime(mime)) {
-    return { ok: false, message: `ชนิดไฟล์ไม่รองรับ (${mime || "unknown"})` };
+    return { status: "invalid", message: `ชนิดไฟล์ไม่รองรับ (${mime || "unknown"})` };
   }
   const { extension } = parseFileName(file.name);
   if (extension && !ALLOWED_EXT_BY_MIME[mime]?.includes(extension)) {
-    return { ok: false, message: `นามสกุล .${extension} ไม่ตรงกับชนิดไฟล์` };
+    return { status: "invalid", message: `นามสกุล .${extension} ไม่ตรงกับชนิดไฟล์` };
   }
-  const max = maxUploadBytes();
-  if (file.size > max) {
-    return { ok: false, message: `ใหญ่เกิน ${Math.round(max / 1024 / 1024)}MB` };
+  if (file.size === 0) return { status: "invalid", message: "ไฟล์ว่างเปล่า" };
+  // Files above the Storage limit are registered as metadata-only references.
+  if (file.size > maxUploadBytes()) {
+    return {
+      status: "reference_pending",
+      message: `ใหญ่เกิน ${Math.round(maxUploadBytes() / 1024 / 1024)}MB — จะบันทึกเป็นข้อมูลอ้างอิง`,
+    };
   }
-  if (file.size === 0) return { ok: false, message: "ไฟล์ว่างเปล่า" };
-  return { ok: true };
+  return { status: "pending" };
 }
 
 async function sha256Hex(file: File): Promise<string> {
@@ -99,7 +117,7 @@ export function Uploader() {
         if (existing.has(id)) continue;
         existing.add(id);
         const v = validate(file);
-        next.push({ id, file, status: v.ok ? "pending" : "invalid", message: v.message });
+        next.push({ id, file, status: v.status, message: v.message });
       }
       return next;
     });
@@ -118,13 +136,19 @@ export function Uploader() {
   }
 
   function uploadAll() {
-    const toUpload = items.filter((i) => i.status === "pending" || i.status === "failed");
+    const toUpload = items.filter(
+      (i) =>
+        i.status === "pending" ||
+        i.status === "reference_pending" ||
+        i.status === "failed"
+    );
     if (toUpload.length === 0) return;
     setSummary(null);
 
     startTransition(async () => {
       const supabase = createClient();
       let uploaded = 0;
+      let referenced = 0;
       let skipped = 0;
       let failed = 0;
 
@@ -133,6 +157,27 @@ export function Uploader() {
           // 1) checksum in the browser (for dedup).
           setItem(item.id, { status: "hashing", message: undefined });
           const checksum = await sha256Hex(item.file);
+
+          // Oversized files: register metadata-only reference (no upload).
+          if (item.file.size > maxUploadBytes()) {
+            const ref = await registerReferenceFile({
+              originalFileName: item.file.name,
+              mime: item.file.type,
+              sizeBytes: item.file.size,
+              checksum,
+            });
+            if (!ref.ok) {
+              failed++;
+              setItem(item.id, { status: "failed", message: ref.error });
+            } else if (ref.skippedDuplicate) {
+              skipped++;
+              setItem(item.id, { status: "skipped_duplicate" });
+            } else {
+              referenced++;
+              setItem(item.id, { status: "reference_saved" });
+            }
+            continue;
+          }
 
           // 2) authorize + get a signed upload URL (or a duplicate verdict).
           const prep = await prepareUpload({
@@ -192,14 +237,17 @@ export function Uploader() {
       }
 
       setSummary(
-        `เลือก ${toUpload.length} ไฟล์ · สำเร็จ ${uploaded} · ข้าม ${skipped} · ล้มเหลว ${failed}`
+        `เลือก ${toUpload.length} ไฟล์ · อัปโหลด ${uploaded} · อ้างอิง ${referenced} · ข้าม ${skipped} · ล้มเหลว ${failed}`
       );
       router.refresh();
     });
   }
 
   const uploadable = items.filter(
-    (i) => i.status === "pending" || i.status === "failed"
+    (i) =>
+      i.status === "pending" ||
+      i.status === "reference_pending" ||
+      i.status === "failed"
   ).length;
 
   return (
@@ -210,8 +258,11 @@ export function Uploader() {
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           เลือกได้หลายไฟล์พร้อมกัน (PDF, PNG, JPEG, JSON) ระบบใช้ชื่อไฟล์จริง
-          อัตโนมัติ · อัปโหลดตรงไปยัง Storage รองรับไฟล์ขนาดใหญ่ (สูงสุด{" "}
-          {Math.round(maxUploadBytes() / 1024 / 1024)}MB ต่อไฟล์)
+          อัตโนมัติ · อัปโหลดตรงไปยัง Storage (สูงสุด{" "}
+          {Math.round(maxUploadBytes() / 1024 / 1024)}MB ต่อไฟล์) ·
+          ไฟล์ที่ใหญ่กว่านั้นจะบันทึกเป็น{" "}
+          <span className="text-yellow-300">ข้อมูลอ้างอิง</span> (เก็บชื่อไฟล์ไว้
+          ไม่เก็บไฟล์จริง)
         </p>
 
         <input

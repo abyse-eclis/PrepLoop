@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { getSignedUrl, deleteSourceFile } from "./upload-actions";
 import { formatBytes } from "@/lib/upload-constants";
 
+export type SourceFileKind = "uploaded" | "catalog" | "reference";
+
 export interface SourceFileRow {
   id: string;
   displayName: string;
@@ -13,8 +15,14 @@ export interface SourceFileRow {
   mimeType: string;
   sizeBytes: number | null;
   createdAt: string;
-  isUploaded: boolean; // has a storage object (vs catalog metadata only)
+  kind: SourceFileKind;
 }
+
+const KIND_NOTE: Record<SourceFileKind, string> = {
+  uploaded: "",
+  catalog: " · (metadata จาก catalog)",
+  reference: " · (อ้างอิง — ไม่มีไฟล์)",
+};
 
 export function FileList({
   files,
@@ -77,11 +85,11 @@ export function FileList({
                 {new Date(f.createdAt).toLocaleDateString("th-TH", {
                   timeZone: timezone,
                 })}
-                {!f.isUploaded ? " · (metadata จาก catalog)" : ""}
+                {KIND_NOTE[f.kind]}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              {f.isUploaded ? (
+              {f.kind === "uploaded" ? (
                 <Button
                   size="sm"
                   variant="outline"

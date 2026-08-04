@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireUser, getActiveWorkspace } from "@/lib/auth/workspace";
 import { ALLOWED_UPLOAD_MIME, STORAGE_BUCKET, getMaxUploadBytes } from "@/lib/env";
-import { ALLOWED_EXT_BY_MIME } from "@/lib/upload-constants";
+import { ALLOWED_EXT_BY_MIME, maxReferenceBytes } from "@/lib/upload-constants";
 import { parseFileName, buildStorageKey } from "@/lib/files";
 
 /**
@@ -202,6 +202,93 @@ export async function finalizeUpload(
   revalidatePath("/imports");
   revalidatePath("/assessments");
   return { ok: true, fileId: (inserted as { id: string }).id };
+}
+
+export interface ReferenceInput {
+  originalFileName: string;
+  mime: string;
+  sizeBytes: number;
+  checksum: string;
+}
+
+export interface ReferenceResult {
+  ok: boolean;
+  fileId?: string;
+  error?: string;
+  skippedDuplicate?: boolean;
+  displayName?: string;
+}
+
+/**
+ * Register a file as METADATA-ONLY reference (no bytes stored). Used for files
+ * that exceed the Storage upload limit (e.g. Supabase free plan caps at 50MB),
+ * so the learner can still track that the source exists and where it belongs,
+ * without uploading it. storage_path stays NULL → the UI shows it as a
+ * reference (no open link), and it never counts against storage.
+ */
+export async function registerReferenceFile(
+  input: ReferenceInput
+): Promise<ReferenceResult> {
+  const { user } = await requireUser();
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace หรือไม่มีสิทธิ์" };
+
+  const { originalFileName, displayName, extension } = parseFileName(
+    input.originalFileName
+  );
+  if (!ALLOWED_UPLOAD_MIME.includes(input.mime as (typeof ALLOWED_UPLOAD_MIME)[number])) {
+    return {
+      ok: false,
+      error: `ชนิดไฟล์ไม่รองรับ (${input.mime || "unknown"})`,
+    };
+  }
+  if (input.sizeBytes <= 0 || input.sizeBytes > maxReferenceBytes()) {
+    return { ok: false, error: "ขนาดไฟล์ไม่ถูกต้อง" };
+  }
+
+  const supabase = await createServerSupabase();
+
+  const { data: existing } = await supabase
+    .from("source_files")
+    .select("id, display_name")
+    .eq("workspace_id", workspace.id)
+    .eq("checksum", input.checksum)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    return {
+      ok: true,
+      skippedDuplicate: true,
+      fileId: (existing as { id: string }).id,
+      displayName:
+        (existing as { display_name: string | null }).display_name ?? displayName,
+    };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("source_files")
+    .insert({
+      workspace_id: workspace.id,
+      external_id: null,
+      title: displayName,
+      display_name: displayName,
+      original_file_name: originalFileName,
+      extension: extension || null,
+      file_type: input.mime,
+      mime_type: input.mime,
+      checksum: input.checksum,
+      storage_bucket: null,
+      storage_path: null, // reference only — no bytes stored
+      size_bytes: input.sizeBytes,
+      uploaded_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/imports");
+  revalidatePath("/assessments");
+  return { ok: true, fileId: (inserted as { id: string }).id, displayName };
 }
 
 /** Create a short-lived signed URL for reading a private source file. */
