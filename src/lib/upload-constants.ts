@@ -1,16 +1,18 @@
 /** Client-safe upload constants (no secrets). Shared by client and server. */
+import { parseFileName } from "@/lib/files";
 
 export const ALLOWED_UPLOAD_MIME = [
   "application/pdf",
   "image/png",
   "image/jpeg",
   "application/json",
+  "text/markdown",
 ] as const;
 
 export type AllowedMime = (typeof ALLOWED_UPLOAD_MIME)[number];
 
 export const UPLOAD_ACCEPT_ATTR =
-  "application/pdf,image/png,image/jpeg,application/json,.pdf,.png,.jpg,.jpeg,.json";
+  "application/pdf,image/png,image/jpeg,application/json,text/markdown,.pdf,.png,.jpg,.jpeg,.json,.md,.markdown";
 
 export const STORAGE_BUCKET = "study-sources";
 
@@ -19,10 +21,39 @@ export const ALLOWED_EXT_BY_MIME: Record<string, string[]> = {
   "image/png": ["png"],
   "image/jpeg": ["jpg", "jpeg"],
   "application/json": ["json"],
+  "text/markdown": ["md", "markdown"],
+};
+
+/** Extension -> canonical MIME (used when the browser reports no/unknown MIME). */
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  json: "application/json",
+  md: "text/markdown",
+  markdown: "text/markdown",
 };
 
 export function isAllowedMime(mime: string): mime is AllowedMime {
   return (ALLOWED_UPLOAD_MIME as readonly string[]).includes(mime);
+}
+
+/**
+ * Resolve a canonical, allowed MIME type from the (often unreliable) browser
+ * MIME plus the filename. Browsers frequently report an empty type for `.md`
+ * and sometimes `text/x-markdown`. Returns null if the file is not supported.
+ */
+export function resolveUploadMime(
+  browserMime: string,
+  fileName: string
+): AllowedMime | null {
+  const m = (browserMime || "").toLowerCase();
+  if (m === "text/x-markdown") return "text/markdown";
+  if (isAllowedMime(m)) return m;
+  const { extension } = parseFileName(fileName);
+  const inferred = EXT_TO_MIME[extension];
+  return inferred && isAllowedMime(inferred) ? inferred : null;
 }
 
 /**

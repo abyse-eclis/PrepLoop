@@ -37,6 +37,7 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "application/json": "json",
+  "text/markdown": "md",
 };
 
 /**
