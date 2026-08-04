@@ -25,14 +25,18 @@ export function isAllowedMime(mime: string): mime is AllowedMime {
   return (ALLOWED_UPLOAD_MIME as readonly string[]).includes(mime);
 }
 
+/** Default max upload size (MB) when no env override is set. */
+export const DEFAULT_MAX_UPLOAD_MB = 100;
+
 /** Max upload size in bytes, readable on both client and server. */
 export function maxUploadBytes(): number {
-  const mb = Number(
+  const raw =
     process.env.MAX_UPLOAD_SIZE_MB ??
-      process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ??
-      20
+    process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB;
+  const mb = Number(raw ?? DEFAULT_MAX_UPLOAD_MB);
+  return (
+    Math.max(1, Number.isFinite(mb) ? mb : DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024
   );
-  return Math.max(1, Number.isFinite(mb) ? mb : 20) * 1024 * 1024;
 }
 
 export function formatBytes(bytes: number): string {
