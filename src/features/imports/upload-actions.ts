@@ -4,120 +4,173 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireUser, getActiveWorkspace } from "@/lib/auth/workspace";
 import { ALLOWED_UPLOAD_MIME, STORAGE_BUCKET, getMaxUploadBytes } from "@/lib/env";
+import { ALLOWED_EXT_BY_MIME } from "@/lib/upload-constants";
 import { parseFileName, buildStorageKey } from "@/lib/files";
 
-export type UploadStatus =
-  | "uploaded"
-  | "skipped_duplicate"
-  | "failed";
-
-export interface UploadFileResult {
-  originalFileName: string;
-  status: UploadStatus;
-  displayName?: string;
-  error?: string;
-  fileId?: string;
-}
-
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 /**
- * Upload ONE source file. One request per file keeps per-file status accurate
- * and prevents a single failure from failing the others.
- *
- * Security: the workspace is resolved from the server session — the client
- * never supplies workspace_id. MIME + extension + size are validated server
- * side. Storage keys are UUID-based (never the user filename). If the DB insert
- * fails after a successful upload, the storage object is deleted (no orphan).
+ * Uploads go DIRECTLY from the browser to Supabase Storage using a signed
+ * upload URL, so the file never passes through the Next.js server action
+ * (Vercel caps request bodies at ~4.5MB). The server only:
+ *   1) authorizes + validates and mints a signed upload URL for a path it
+ *      controls (scoped to the caller's workspace), then
+ *   2) records the source_files metadata row after the client upload finishes.
+ * Size is bounded by MAX_UPLOAD_SIZE_MB and the Supabase bucket limit.
  */
-export async function uploadSingleSourceFile(
-  formData: FormData
-): Promise<UploadFileResult> {
-  const { user } = await requireUser();
-  const workspace = await getActiveWorkspace();
 
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
-    return { originalFileName: "(ไม่ทราบชื่อ)", status: "failed", error: "ไม่พบไฟล์" };
-  }
-  const { originalFileName, displayName, extension } = parseFileName(file.name);
+export interface PrepareInput {
+  originalFileName: string;
+  mime: string;
+  sizeBytes: number;
+  checksum: string; // SHA-256 hex, computed in the browser
+}
 
-  if (!workspace) {
-    return { originalFileName, status: "failed", error: "ไม่พบ workspace หรือไม่มีสิทธิ์" };
-  }
+export interface PrepareResult {
+  ok: boolean;
+  mode?: "ready" | "duplicate";
+  error?: string;
+  path?: string;
+  token?: string;
+  displayName?: string;
+  extension?: string;
+  existingFileId?: string;
+}
 
-  // Validate MIME (trusted server value) + extension consistency.
-  const mime = file.type;
+export interface FinalizeInput {
+  path: string;
+  originalFileName: string;
+  displayName: string;
+  extension: string;
+  mime: string;
+  sizeBytes: number;
+  checksum: string;
+}
+
+export interface FinalizeResult {
+  ok: boolean;
+  fileId?: string;
+  error?: string;
+  skippedDuplicate?: boolean;
+}
+
+function validateFileMeta(
+  mime: string,
+  fileName: string,
+  sizeBytes: number
+): string | null {
   if (!ALLOWED_UPLOAD_MIME.includes(mime as (typeof ALLOWED_UPLOAD_MIME)[number])) {
-    return {
-      originalFileName,
-      status: "failed",
-      error: `ชนิดไฟล์ไม่รองรับ (${mime || "unknown"}) — รองรับ PDF, PNG, JPEG, JSON`,
-    };
+    return `ชนิดไฟล์ไม่รองรับ (${mime || "unknown"}) — รองรับ PDF, PNG, JPEG, JSON`;
   }
-  const allowedExt: Record<string, string[]> = {
-    "application/pdf": ["pdf"],
-    "image/png": ["png"],
-    "image/jpeg": ["jpg", "jpeg"],
-    "application/json": ["json"],
-  };
-  if (extension && !allowedExt[mime]?.includes(extension)) {
-    return {
-      originalFileName,
-      status: "failed",
-      error: `นามสกุลไฟล์ (.${extension}) ไม่ตรงกับชนิดไฟล์จริง (${mime})`,
-    };
+  const { extension } = parseFileName(fileName);
+  if (extension && !ALLOWED_EXT_BY_MIME[mime]?.includes(extension)) {
+    return `นามสกุลไฟล์ (.${extension}) ไม่ตรงกับชนิดไฟล์จริง (${mime})`;
   }
+  const max = getMaxUploadBytes();
+  if (sizeBytes > max) {
+    return `ไฟล์ใหญ่เกินไป (สูงสุด ${Math.round(max / 1024 / 1024)}MB)`;
+  }
+  if (sizeBytes <= 0) return "ไฟล์ว่างเปล่า";
+  return null;
+}
 
-  const maxBytes = getMaxUploadBytes();
-  if (file.size > maxBytes) {
-    return {
-      originalFileName,
-      status: "failed",
-      error: `ไฟล์ใหญ่เกินไป (สูงสุด ${Math.round(maxBytes / 1024 / 1024)}MB)`,
-    };
-  }
-  if (file.size === 0) {
-    return { originalFileName, status: "failed", error: "ไฟล์ว่างเปล่า" };
-  }
+/** Step 1: authorize + validate, dedup by checksum, mint a signed upload URL. */
+export async function prepareUpload(input: PrepareInput): Promise<PrepareResult> {
+  await requireUser();
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace หรือไม่มีสิทธิ์" };
 
-  const buffer = await file.arrayBuffer();
-  const checksum = await sha256Hex(buffer);
+  const { originalFileName, displayName, extension } = parseFileName(
+    input.originalFileName
+  );
+  const err = validateFileMeta(input.mime, originalFileName, input.sizeBytes);
+  if (err) return { ok: false, error: err };
 
   const supabase = await createServerSupabase();
 
-  // Content dedup: same checksum in this workspace -> skip (don't re-upload).
+  // Content dedup: identical bytes already stored for this workspace -> skip.
   const { data: existing } = await supabase
     .from("source_files")
     .select("id, display_name")
     .eq("workspace_id", workspace.id)
-    .eq("checksum", checksum)
+    .eq("checksum", input.checksum)
     .limit(1)
     .maybeSingle();
   if (existing) {
     return {
-      originalFileName,
-      status: "skipped_duplicate",
-      displayName: (existing as { display_name: string | null }).display_name ?? displayName,
-      fileId: (existing as { id: string }).id,
+      ok: true,
+      mode: "duplicate",
+      existingFileId: (existing as { id: string }).id,
+      displayName:
+        (existing as { display_name: string | null }).display_name ?? displayName,
     };
   }
 
-  // UUID-based storage key (never the user filename). Same name + different
-  // content => different UUID => no collision, no silent overwrite.
-  const objectId = crypto.randomUUID();
-  const storageKey = buildStorageKey(workspace.id, objectId, mime, originalFileName);
+  // UUID-based key under the caller's workspace folder (never the user filename).
+  const path = buildStorageKey(
+    workspace.id,
+    crypto.randomUUID(),
+    input.mime,
+    originalFileName
+  );
 
-  const { error: uploadErr } = await supabase.storage
+  const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)
-    .upload(storageKey, buffer, { contentType: mime, upsert: false });
-  if (uploadErr) {
-    return { originalFileName, status: "failed", error: uploadErr.message };
+    .createSignedUploadUrl(path);
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "สร้างลิงก์อัปโหลดไม่สำเร็จ" };
+  }
+
+  return {
+    ok: true,
+    mode: "ready",
+    path: data.path,
+    token: data.token,
+    displayName,
+    extension,
+  };
+}
+
+/** Step 2: after the browser finished uploading, record the metadata row. */
+export async function finalizeUpload(
+  input: FinalizeInput
+): Promise<FinalizeResult> {
+  const { user } = await requireUser();
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace หรือไม่มีสิทธิ์" };
+
+  // The path MUST be inside this workspace's folder — never trust a raw path.
+  const expectedPrefix = `workspaces/${workspace.id}/learning-sources/`;
+  if (!input.path.startsWith(expectedPrefix)) {
+    return { ok: false, error: "เส้นทางไฟล์ไม่ถูกต้อง" };
+  }
+  const metaErr = validateFileMeta(input.mime, input.originalFileName, input.sizeBytes);
+  if (metaErr) return { ok: false, error: metaErr };
+
+  const supabase = await createServerSupabase();
+
+  // Verify the object really exists (and read its true size) before recording.
+  const folder = input.path.slice(0, input.path.lastIndexOf("/"));
+  const filename = input.path.slice(input.path.lastIndexOf("/") + 1);
+  const { data: listed } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .list(folder, { search: filename, limit: 1 });
+  const object = (listed ?? []).find((o) => o.name === filename);
+  if (!object) {
+    return { ok: false, error: "ไม่พบไฟล์ที่อัปโหลด (อาจอัปโหลดไม่สำเร็จ)" };
+  }
+  const realSize =
+    (object.metadata as { size?: number } | null)?.size ?? input.sizeBytes;
+
+  // Race-safe dedup: if the same content got recorded meanwhile, drop this one.
+  const { data: existing } = await supabase
+    .from("source_files")
+    .select("id")
+    .eq("workspace_id", workspace.id)
+    .eq("checksum", input.checksum)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    await supabase.storage.from(STORAGE_BUCKET).remove([input.path]);
+    return { ok: true, skippedDuplicate: true, fileId: (existing as { id: string }).id };
   }
 
   const { data: inserted, error: dbErr } = await supabase
@@ -125,38 +178,33 @@ export async function uploadSingleSourceFile(
     .insert({
       workspace_id: workspace.id,
       external_id: null,
-      title: displayName,
-      display_name: displayName,
-      original_file_name: originalFileName,
-      extension: extension || null,
-      file_type: mime,
-      mime_type: mime,
-      checksum,
+      title: input.displayName,
+      display_name: input.displayName,
+      original_file_name: input.originalFileName,
+      extension: input.extension || null,
+      file_type: input.mime,
+      mime_type: input.mime,
+      checksum: input.checksum,
       storage_bucket: STORAGE_BUCKET,
-      storage_path: storageKey,
-      size_bytes: file.size,
+      storage_path: input.path,
+      size_bytes: realSize,
       uploaded_by: user.id,
     })
     .select("id")
     .single();
 
   if (dbErr) {
-    // Cleanup orphaned storage object so storage and DB stay consistent.
-    await supabase.storage.from(STORAGE_BUCKET).remove([storageKey]);
-    return { originalFileName, status: "failed", error: dbErr.message };
+    // Cleanup the orphaned object so storage and DB stay consistent.
+    await supabase.storage.from(STORAGE_BUCKET).remove([input.path]);
+    return { ok: false, error: dbErr.message };
   }
 
   revalidatePath("/imports");
   revalidatePath("/assessments");
-  return {
-    originalFileName,
-    displayName,
-    status: "uploaded",
-    fileId: (inserted as { id: string }).id,
-  };
+  return { ok: true, fileId: (inserted as { id: string }).id };
 }
 
-/** Create a short-lived signed URL for a private source file. */
+/** Create a short-lived signed URL for reading a private source file. */
 export async function getSignedUrl(
   sourceFileId: string
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
@@ -178,7 +226,7 @@ export async function getSignedUrl(
 
   const { data, error } = await supabase.storage
     .from(row.storage_bucket ?? STORAGE_BUCKET)
-    .createSignedUrl(row.storage_path, 60 * 10); // 10 minutes
+    .createSignedUrl(row.storage_path, 60 * 10);
   if (error || !data) {
     return { ok: false, error: error?.message ?? "สร้างลิงก์ไม่สำเร็จ" };
   }
