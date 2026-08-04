@@ -25,10 +25,15 @@ export function isAllowedMime(mime: string): mime is AllowedMime {
   return (ALLOWED_UPLOAD_MIME as readonly string[]).includes(mime);
 }
 
-/** Default max upload size (MB) when no env override is set. */
-export const DEFAULT_MAX_UPLOAD_MB = 100;
+/**
+ * Default STORAGE upload limit (MB) when no env override is set. This should
+ * match the Supabase project "Global file size limit" (Free plan is fixed at
+ * 50MB). Files larger than this are registered as metadata-only references
+ * instead of being uploaded.
+ */
+export const DEFAULT_MAX_UPLOAD_MB = 50;
 
-/** Max upload size in bytes, readable on both client and server. */
+/** Max size (bytes) that can actually be uploaded to Storage. */
 export function maxUploadBytes(): number {
   const raw =
     process.env.MAX_UPLOAD_SIZE_MB ??
@@ -37,6 +42,14 @@ export function maxUploadBytes(): number {
   return (
     Math.max(1, Number.isFinite(mb) ? mb : DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024
   );
+}
+
+/**
+ * Upper bound for metadata-only reference registration (no bytes stored), just
+ * to reject absurd values. Generous since nothing is actually uploaded.
+ */
+export function maxReferenceBytes(): number {
+  return 2 * 1024 * 1024 * 1024; // 2 GB
 }
 
 export function formatBytes(bytes: number): string {

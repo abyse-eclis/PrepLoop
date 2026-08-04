@@ -32,7 +32,7 @@ export default async function ImportsPage() {
       supabase
         .from("source_files")
         .select(
-          "id, display_name, title, original_file_name, mime_type, file_type, size_bytes, storage_path, created_at"
+          "id, external_id, display_name, title, original_file_name, mime_type, file_type, size_bytes, storage_path, created_at"
         )
         .eq("workspace_id", workspace.id)
         .order("created_at", { ascending: false })
@@ -42,6 +42,7 @@ export default async function ImportsPage() {
     files = (
       (f as Array<{
         id: string;
+        external_id: string | null;
         display_name: string | null;
         title: string | null;
         original_file_name: string | null;
@@ -58,7 +59,11 @@ export default async function ImportsPage() {
       mimeType: row.mime_type ?? row.file_type ?? "application/octet-stream",
       sizeBytes: row.size_bytes,
       createdAt: row.created_at,
-      isUploaded: Boolean(row.storage_path),
+      kind: row.storage_path
+        ? ("uploaded" as const)
+        : row.external_id
+          ? ("catalog" as const)
+          : ("reference" as const),
     }));
   }
 
