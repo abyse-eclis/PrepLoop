@@ -80,7 +80,9 @@ export async function registerSourceFile(
       file_type: mime,
       mime_type: mime,
       checksum: null,
-      storage_bucket: null,
+      // storage_bucket is NOT NULL (has a default); keep the default. It is
+      // unused for reference rows because storage_path is null.
+      storage_bucket: STORAGE_BUCKET,
       storage_path: null, // reference only — no file stored
       size_bytes: input.sizeBytes,
       uploaded_by: user.id,

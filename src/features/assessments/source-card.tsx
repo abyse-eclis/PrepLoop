@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getSignedUrl } from "@/features/imports/upload-actions";
+import { Dialog } from "@/components/ui/dialog";
 import { ResultForm } from "./result-form";
 import { activityLabel } from "@/lib/status";
 import type { AssessmentSource } from "@/types/db";
@@ -15,25 +15,7 @@ export function SourceCard({
   source: AssessmentSource;
   today: string;
 }) {
-  const [showForm, setShowForm] = useState(false);
-  const [pending, start] = useTransition();
-  const [msg, setMsg] = useState<string | null>(null);
-
-  function open(kind: "question" | "answer" | "solution") {
-    if (!source.source_file_id) {
-      setMsg("ไม่มีไฟล์แนบสำหรับชุดนี้");
-      return;
-    }
-    setMsg(null);
-    start(async () => {
-      const res = await getSignedUrl(source.source_file_id!);
-      if (res.ok && res.url) {
-        window.open(res.url, "_blank", "noopener,noreferrer");
-      } else {
-        setMsg(res.error ?? "เปิดไฟล์ไม่สำเร็จ");
-      }
-    });
-  }
+  const [open, setOpen] = useState(false);
 
   const pages = (from: number | null, to: number | null) =>
     from ? `หน้า ${from}${to && to !== from ? `–${to}` : ""}` : "—";
@@ -81,49 +63,26 @@ export function SourceCard({
           </p>
         ) : null}
 
-        {msg ? <p className="mt-2 text-xs text-destructive">{msg}</p> : null}
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => open("question")}
-          >
-            เปิดข้อสอบ
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => open("answer")}
-          >
-            เปิดเฉลย
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => open("solution")}
-          >
-            เฉลยละเอียด
-          </Button>
-          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+        <div className="mt-3">
+          <Button size="sm" onClick={() => setOpen(true)}>
             กรอกผล
           </Button>
         </div>
 
-        {showForm ? (
-          <div className="mt-4 border-t border-border pt-4">
-            <ResultForm
-              subject={source.subject}
-              assessmentSourceId={source.id}
-              passingPercentage={source.passing_percentage}
-              defaultDate={today}
-              onDone={() => setShowForm(false)}
-            />
-          </div>
-        ) : null}
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+          title={`กรอกผล — ${source.title}`}
+          description={`วิชา ${source.subject} · เกณฑ์ผ่าน ${source.passing_percentage}%`}
+        >
+          <ResultForm
+            subject={source.subject}
+            assessmentSourceId={source.id}
+            passingPercentage={source.passing_percentage}
+            defaultDate={today}
+            onDone={() => setOpen(false)}
+          />
+        </Dialog>
       </CardContent>
     </Card>
   );

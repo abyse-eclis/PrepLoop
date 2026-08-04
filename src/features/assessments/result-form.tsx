@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Alert } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import { recordAttempt } from "./actions";
 import { assessmentResult, validateAnswerCounts } from "@/lib/calculations";
 import { errorTypeEnum } from "@/lib/schemas/common";
@@ -39,6 +41,7 @@ export function ResultForm({
   onDone?: () => void;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [f, setF] = useState({
@@ -124,8 +127,14 @@ export function ResultForm({
       });
       if (!res.ok) {
         setError(res.error ?? "บันทึกไม่สำเร็จ");
+        toast({ variant: "error", title: "บันทึกผลไม่สำเร็จ", description: res.error });
         return;
       }
+      toast({
+        variant: "success",
+        title: "บันทึกผลสอบแล้ว",
+        description: res.message,
+      });
       router.refresh();
       onDone?.();
     });
@@ -237,7 +246,7 @@ export function ResultForm({
           (เกณฑ์ {passingPercentage}%)
         </p>
       ) : null}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <Alert variant="destructive">{error}</Alert> : null}
 
       <div className="flex gap-2">
         <Button size="sm" onClick={submit} disabled={pending}>

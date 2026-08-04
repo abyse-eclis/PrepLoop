@@ -9,6 +9,7 @@ import {
   resolveUploadMime,
   formatBytes,
 } from "@/lib/upload-constants";
+import { useToast } from "@/components/ui/toast";
 import { registerSourceFile } from "./upload-actions";
 
 type ItemStatus =
@@ -50,6 +51,7 @@ function keyOf(f: File): string {
 
 export function Uploader() {
   const router = useRouter();
+  const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<FileItem[]>([]);
   const [pending, startTransition] = useTransition();
@@ -128,6 +130,11 @@ export function Uploader() {
       setSummary(
         `เลือก ${toSave.length} ไฟล์ · บันทึก ${saved} · ข้าม ${skipped} · ล้มเหลว ${failed}`
       );
+      toast({
+        variant: failed > 0 ? "error" : "success",
+        title: "บันทึกไฟล์แหล่งเรียนแล้ว",
+        description: `บันทึก ${saved} · ข้าม ${skipped} · ล้มเหลว ${failed}`,
+      });
       router.refresh();
     });
   }
