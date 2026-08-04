@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, Textarea } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
+import { useToast } from "@/components/ui/toast";
 
 function previewOf(type: ImportType, data: unknown): Record<string, number> {
   const d = data as Record<string, unknown>;
@@ -64,6 +65,7 @@ const TYPE_OPTIONS = IMPORT_TYPES.map((t) => ({
 
 export function ImportPanel() {
   const router = useRouter();
+  const { toast } = useToast();
   const [type, setType] = useState<ImportType>("workspace_config");
   const [text, setText] = useState("");
   const [issues, setIssues] = useState<ParseIssue[] | null>(null);
@@ -132,6 +134,11 @@ export function ImportPanel() {
       else if (type === "execution_history") res = await importExecutionHistory(text);
       else res = await importStudyPlan(text);
       setResult(res);
+      toast(
+        res.ok
+          ? { variant: "success", title: "นำเข้าสำเร็จ", description: res.message }
+          : { variant: "error", title: "นำเข้าไม่สำเร็จ", description: res.error }
+      );
       if (res.ok) {
         setText("");
         setValidData(null);

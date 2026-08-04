@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { TimePicker24h } from "@/components/ui/time-picker";
+import { Alert } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import { addTimeIntervals } from "./actions";
 import { validateIntervals } from "@/lib/dates";
 import { useRouter } from "next/navigation";
@@ -23,6 +25,7 @@ export function AddTimeForm({
   onDone?: () => void;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [intervals, setIntervals] = useState<Interval[]>([
     { start: "", end: "" },
   ]);
@@ -59,6 +62,7 @@ export function AddTimeForm({
       }
       setIntervals([{ start: "", end: "" }]);
       setNote("");
+      toast({ variant: "success", title: "บันทึกเวลาแล้ว", description: res.message });
       router.refresh();
       onDone?.();
     });
@@ -144,11 +148,13 @@ export function AddTimeForm({
           preview && !preview.ok ? preview.errors : error ? [error] : [];
         if (messages.length === 0) return null;
         return (
-          <ul className="space-y-0.5 text-sm text-destructive">
-            {messages.map((m, i) => (
-              <li key={i}>• {m}</li>
-            ))}
-          </ul>
+          <Alert variant="destructive">
+            <ul className="space-y-0.5">
+              {messages.map((m, i) => (
+                <li key={i}>• {m}</li>
+              ))}
+            </ul>
+          </Alert>
         );
       })()}
 
