@@ -624,6 +624,8 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
         target_minutes: item.targetMinutes,
         priority: item.priority,
         instructions: item.instructions,
+        resource_url: item.resourceUrl ?? null,
+        resource_label: item.resourceLabel ?? null,
         review_reference_ids: item.reviewReferenceIds ?? [],
         metadata: item.metadata ?? null,
       }));
@@ -693,48 +695,67 @@ export async function importExecutionHistory(raw: string): Promise<ImportResult>
 
   const supabase = await createServerSupabase();
 
-  // Resolve plan-item external ids -> db ids (for linkage) in one query.
-  const externalIds = Array.from(
-    new Set(norm.sessions.map((s) => s.planItemExternalId).filter((v): v is string => !!v))
+  // Resolve direct ids used by the reference format. If history is imported
+  // before a plan, these ids are still persisted and matched by /history later.
+  const sourceActivityIds = Array.from(
+    new Set(norm.sessions.map((s) => s.sourceActivityId).filter((v): v is string => !!v))
+  );
+  const assessmentSourceIds = Array.from(
+    new Set(norm.sessions.map((s) => s.assessmentSourceId).filter((v): v is string => !!v))
   );
   const planItemIdByExternal = new Map<string, string>();
-  if (externalIds.length > 0) {
+  if (sourceActivityIds.length > 0) {
     const { data: items } = await supabase
       .from("study_plan_items")
       .select("id, stable_external_id")
       .eq("workspace_id", workspace.id)
-      .in("stable_external_id", externalIds);
+      .in("stable_external_id", sourceActivityIds);
     for (const it of (items as Array<{ id: string; stable_external_id: string }> | null) ?? []) {
       planItemIdByExternal.set(it.stable_external_id, it.id);
     }
   }
+  if (assessmentSourceIds.length > 0) {
+    const { data: items } = await supabase
+      .from("study_plan_items")
+      .select("id, assessment_source_id")
+      .eq("workspace_id", workspace.id)
+      .in("assessment_source_id", assessmentSourceIds);
+    for (const it of (items as Array<{ id: string; assessment_source_id: string | null }> | null) ?? []) {
+      if (it.assessment_source_id) planItemIdByExternal.set(it.assessment_source_id, it.id);
+    }
+  }
 
-  // Dedup against existing sessions (same date+start+end).
+  // Dedup against existing imports using the deterministic natural key.
   const dates = Array.from(new Set(norm.sessions.map((s) => s.sessionDate)));
   const existingKeys = new Set<string>();
   const { data: existingSessions } = await supabase
     .from("study_sessions")
-    .select("session_date, start_time, end_time, subject")
+    .select("import_dedup_key")
     .eq("workspace_id", workspace.id)
     .in("session_date", dates);
-  for (const s of (existingSessions as Array<{ session_date: string; start_time: string | null; end_time: string | null; subject: string | null }> | null) ?? []) {
-    existingKeys.add(`${s.session_date}|${s.start_time ?? ""}|${s.end_time ?? ""}|${s.subject ?? ""}`);
+  for (const s of (existingSessions as Array<{ import_dedup_key: string | null }> | null) ?? []) {
+    if (s.import_dedup_key) existingKeys.add(s.import_dedup_key);
   }
 
   const rows: Array<Record<string, unknown>> = [];
   let skippedDuplicate = norm.duplicatesInFile;
   for (const s of norm.sessions) {
-    const existKey = `${s.sessionDate}|${s.startTime ?? ""}|${s.endTime ?? ""}|${s.subject ?? ""}`;
-    if (existingKeys.has(existKey)) {
+    if (existingKeys.has(s.dedupKey)) {
       skippedDuplicate++;
       continue;
     }
     rows.push({
       workspace_id: workspace.id,
-      plan_item_id: s.planItemExternalId
-        ? planItemIdByExternal.get(s.planItemExternalId) ?? null
-        : null,
+      plan_item_id: s.sourceActivityId
+        ? planItemIdByExternal.get(s.sourceActivityId) ?? null
+        : s.assessmentSourceId
+          ? planItemIdByExternal.get(s.assessmentSourceId) ?? null
+          : null,
       subject: s.subject,
+      source_activity_id: s.sourceActivityId,
+      assessment_source_external_id: s.assessmentSourceId,
+      activity_type: s.activityType,
+      course_code: s.courseCode,
       session_date: s.sessionDate,
       start_time: s.startTime,
       end_time: s.endTime,
@@ -743,6 +764,12 @@ export async function importExecutionHistory(raw: string): Promise<ImportResult>
       actual_lesson_from: s.lessonFrom,
       actual_lesson_to: s.lessonTo,
       note: s.note,
+      score: s.score,
+      max_score: s.maxScore,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      total_questions: s.totalQuestions,
+      import_dedup_key: s.dedupKey,
     });
   }
 

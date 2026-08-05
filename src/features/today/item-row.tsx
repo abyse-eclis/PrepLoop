@@ -2,15 +2,17 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
 import { activityLabel } from "@/lib/status";
 import { StatusBadge } from "@/components/ui/misc";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { setItemStatus } from "@/features/sessions/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
 import type { PlanItemStatus } from "@/lib/schemas/common";
 import { PRIORITY_WEIGHT } from "@/lib/calculations";
+import { getPlanItemResource } from "@/lib/plans/resource";
 
 const PRIORITY_LABEL: Record<string, string> = {
   high: "สูง",
@@ -35,6 +37,7 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
   }
 
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
+  const resource = getPlanItemResource(item);
 
   return (
     <Card>
@@ -140,6 +143,19 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
                 กรอกผล
               </Button>
             </Link>
+          ) : null}
+          {resource ? (
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${resource.label} สำหรับ ${item.subject}`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              {resource.label}
+            </a>
           ) : null}
           <Link href={`/plan?item=${item.stable_external_id}`}>
             <Button size="sm" variant="ghost">
