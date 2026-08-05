@@ -137,22 +137,30 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                           <td className="px-3 py-1.5">{i.priority}</td>
                           <td className="px-3 py-1.5">
                             {resource ? (
-                              <a
-                                href={resource.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={`${resource.label} สำหรับ ${i.subject}`}
-                                className={buttonVariants({
-                                  variant: "outline",
-                                  size: "sm",
-                                })}
-                              >
+                              <div className="flex flex-wrap items-center gap-2">
+                                {resource.sourceName ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {resource.sourceName}
+                                  </span>
+                                ) : null}
+                                <a
+                                  href={resource.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`${resource.label}สำหรับ ${i.subject}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                                  title={resource.tooltip}
+                                  className={buttonVariants({
+                                    variant: "outline",
+                                    size: "sm",
+                                  })}
+                                >
                                 <ExternalLink
                                   className="h-3.5 w-3.5"
                                   aria-hidden="true"
                                 />
-                                {resource.label}
-                              </a>
+                                  {resource.label}
+                                </a>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
