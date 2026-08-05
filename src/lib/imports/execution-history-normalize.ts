@@ -11,12 +11,20 @@ export interface NormalizedSession {
   durationMinutes: number;
   crossesMidnight: boolean;
   subject: string | null;
+  sourceActivityId: string | null;
+  assessmentSourceId: string | null;
+  activityType: string | null;
   courseCode: string | null;
   lessonFrom: string | null;
   lessonTo: string | null;
   planItemExternalId: string | null;
   status: string;
   note: string | null;
+  score: number | null;
+  maxScore: number | null;
+  correct: number | null;
+  incorrect: number | null;
+  totalQuestions: number | null;
   /** Stable within-file key for dedup. */
   dedupKey: string;
 }
@@ -136,9 +144,16 @@ export function normalizeExecutionHistory(
       }
 
       const subject = record.subject ?? null;
+      const sourceActivityId =
+        record.sourceActivityId ??
+        record.planItemExternalId ??
+        record.stableExternalId ??
+        record.taskRef ??
+        null;
+      const assessmentSourceId = record.assessmentSourceId ?? null;
       const start = raw.startTime ?? null;
       const end = raw.endTime ?? null;
-      const dedupKey = `${record.date}|${start ?? ""}|${end ?? ""}|${subject ?? ""}|${durationMinutes}`;
+      const dedupKey = `${record.date}|${start ?? ""}|${end ?? ""}|${sourceActivityId ?? ""}|${assessmentSourceId ?? ""}|${subject ?? ""}|${record.activityType ?? ""}|${durationMinutes}`;
       if (seen.has(dedupKey)) {
         duplicatesInFile++;
         continue;
@@ -153,13 +168,20 @@ export function normalizeExecutionHistory(
         durationMinutes,
         crossesMidnight,
         subject,
+        sourceActivityId,
+        assessmentSourceId,
+        activityType: record.activityType ?? null,
         courseCode: record.courseCode ?? null,
         lessonFrom: record.lessonFrom ?? record.lessonCode ?? null,
         lessonTo: record.lessonTo ?? record.lessonCode ?? null,
-        planItemExternalId:
-          record.planItemExternalId ?? record.stableExternalId ?? record.taskRef ?? null,
+        planItemExternalId: sourceActivityId,
         status: normalizeStatus(raw.status ?? record.status),
         note: raw.note ?? raw.notes ?? record.notes ?? record.note ?? null,
+        score: record.score ?? null,
+        maxScore: record.maxScore ?? null,
+        correct: record.correct ?? null,
+        incorrect: record.incorrect ?? null,
+        totalQuestions: record.totalQuestions ?? null,
         dedupKey,
       });
     }

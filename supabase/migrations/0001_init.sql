@@ -256,6 +256,8 @@ create table public.study_plan_items (
   target_minutes int not null default 0,
   priority text not null default 'medium',
   instructions text default '',
+  resource_url text,
+  resource_label text,
   review_reference_ids text[] default '{}',
   metadata jsonb,
   created_at timestamptz not null default now()
@@ -289,6 +291,10 @@ create table public.study_sessions (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   plan_item_id uuid references public.study_plan_items(id) on delete set null,
   subject text,
+  source_activity_id text,
+  assessment_source_external_id text,
+  activity_type text,
+  course_code text,
   session_date date not null,
   start_time text,   -- HH:MM
   end_time text,     -- HH:MM
@@ -297,11 +303,18 @@ create table public.study_sessions (
   actual_lesson_from text,
   actual_lesson_to text,
   note text,
+  score numeric,
+  max_score numeric,
+  correct int,
+  incorrect int,
+  total_questions int,
+  import_dedup_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index ss_ws_date_idx on public.study_sessions(workspace_id, session_date);
 create index ss_item_idx on public.study_sessions(plan_item_id);
+create unique index ss_import_dedup_key_idx on public.study_sessions(workspace_id, import_dedup_key) where import_dedup_key is not null;
 
 -- ---------------------------------------------------------------------------
 -- assessment_attempts (mutable execution data)
@@ -381,6 +394,12 @@ create table public.error_logs (
   error_type text not null,
   out_of_scope boolean not null default false,
   note text,
+  score numeric,
+  max_score numeric,
+  correct int,
+  incorrect int,
+  total_questions int,
+  import_dedup_key text,
   created_at timestamptz not null default now()
 );
 create index el_ws_idx on public.error_logs(workspace_id);

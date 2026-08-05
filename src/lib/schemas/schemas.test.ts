@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseJsonWithSchema, validateWithSchema } from "./index";
 import { workspaceConfigSchema } from "./workspace-config";
 import { learningSourceCatalogSchema } from "./learning-source";
-import { studyPlanSchema } from "./study-plan";
+import { planItemSchema, studyPlanSchema } from "./study-plan";
 import { recoveryPlanSchema } from "./recovery";
 
 const workspace = {
@@ -94,6 +94,35 @@ describe("learningSourceCatalogSchema", () => {
 describe("studyPlanSchema", () => {
   it("accepts valid plan", () => {
     expect(validateWithSchema(plan, studyPlanSchema).ok).toBe(true);
+  });
+
+  it("normalizes metadata.videoUrl fallback into resourceUrl", () => {
+    const parsed = planItemSchema.parse({
+      stableExternalId: "2026-08-01-krupone-noun",
+      subject: "TGAT1",
+      activityType: "review",
+      targetMinutes: 60,
+      priority: "medium",
+      instructions: "ทบทวน Noun",
+      metadata: { videoUrl: "https://www.youtube.com/watch?v=0nXxgts-RWc" },
+    });
+
+    expect(parsed.resourceUrl).toBe(
+      "https://www.youtube.com/watch?v=0nXxgts-RWc"
+    );
+    expect(parsed.resourceLabel).toBe("เปิดลิงก์");
+  });
+  it("rejects non-http resourceUrl", () => {
+    const r = planItemSchema.safeParse({
+      stableExternalId: "2026-08-01-bad-link",
+      subject: "TGAT1",
+      activityType: "review",
+      targetMinutes: 60,
+      priority: "medium",
+      resourceUrl: "javascript:alert(1)",
+    });
+
+    expect(r.success).toBe(false);
   });
   it("rejects endDate before startDate", () => {
     const r = validateWithSchema(

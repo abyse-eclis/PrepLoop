@@ -30,6 +30,8 @@ function toDiffShape(items: PlanItem[]) {
       targetMinutes: i.target_minutes,
       priority: i.priority,
       instructions: i.instructions ?? "",
+      resourceUrl: i.resource_url ?? undefined,
+      resourceLabel: i.resource_label ?? undefined,
       reviewReferenceIds: i.review_reference_ids ?? [],
     });
     byDate.set(i.date, arr);

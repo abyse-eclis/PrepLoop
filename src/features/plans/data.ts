@@ -28,20 +28,27 @@ export async function resolveVersionForDate(
     .from("study_plan_versions")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .in("status", ["active", "superseded"])
-    .lte("effective_from", date)
-    .order("effective_from", { ascending: false })
+    .in("status", ["active", "superseded", "draft"])
+    .lte("start_date", date)
+    .gte("end_date", date)
     .order("version_number", { ascending: false });
 
   const versions = (data as PlanVersion[] | null) ?? [];
-  for (const v of versions) {
-    const from = v.effective_from ?? v.start_date;
-    const to = v.effective_to;
-    if (from <= date && (to === null || to >= date)) {
-      return v;
-    }
-  }
-  return versions[0] ?? null;
+  const effective = versions
+    .filter((v) => v.status !== "draft")
+    .filter((v) => {
+      const from = v.effective_from ?? v.start_date;
+      const to = v.effective_to ?? v.end_date;
+      return from <= date && to >= date;
+    })
+    .sort((a, b) => {
+      const fromCmp = (b.effective_from ?? b.start_date).localeCompare(
+        a.effective_from ?? a.start_date
+      );
+      return fromCmp || b.version_number - a.version_number;
+    });
+
+  return effective[0] ?? versions.find((v) => v.status === "draft") ?? null;
 }
 
 export async function getActivePlanVersion(

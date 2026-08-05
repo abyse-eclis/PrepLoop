@@ -5,6 +5,9 @@ import type { PlanItem } from "@/types/db";
 import { activityLabel } from "@/lib/status";
 import { Combobox } from "@/components/ui/combobox";
 import { formatDateKeyThai } from "@/lib/dates";
+import { buttonVariants } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
+import { getPlanItemResource } from "@/lib/plans/resource";
 
 type Grouping = "day" | "week" | "month";
 
@@ -101,7 +104,7 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                 </span>
               </div>
               <div className="scroll-x">
-                <table className="w-full min-w-[520px] text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
                       <th className="px-3 py-1.5 font-medium">วิชา</th>
@@ -109,28 +112,54 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                       <th className="px-3 py-1.5 font-medium">กิจกรรม</th>
                       <th className="px-3 py-1.5 font-medium">เป้าหมาย</th>
                       <th className="px-3 py-1.5 font-medium">ความสำคัญ</th>
+                      <th className="px-3 py-1.5 font-medium">แหล่งเรียน</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupItems.map((i) => (
-                      <tr key={i.id} className="border-t border-border/60">
-                        <td className="px-3 py-1.5">{i.subject}</td>
-                        <td className="px-3 py-1.5 text-muted-foreground">
-                          {i.course_code ?? "-"}
-                          {i.lesson_from ? ` · ${i.lesson_from}` : ""}
-                          {i.lesson_to && i.lesson_to !== i.lesson_from
-                            ? `–${i.lesson_to}`
-                            : ""}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {activityLabel(i.activity_type)}
-                        </td>
-                        <td className="px-3 py-1.5 tabular-nums">
-                          {i.target_minutes}น.
-                        </td>
-                        <td className="px-3 py-1.5">{i.priority}</td>
-                      </tr>
-                    ))}
+                    {groupItems.map((i) => {
+                      const resource = getPlanItemResource(i);
+                      return (
+                        <tr key={i.id} className="border-t border-border/60">
+                          <td className="px-3 py-1.5">{i.subject}</td>
+                          <td className="px-3 py-1.5 text-muted-foreground">
+                            {i.course_code ?? "-"}
+                            {i.lesson_from ? ` · ${i.lesson_from}` : ""}
+                            {i.lesson_to && i.lesson_to !== i.lesson_from
+                              ? `–${i.lesson_to}`
+                              : ""}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {activityLabel(i.activity_type)}
+                          </td>
+                          <td className="px-3 py-1.5 tabular-nums">
+                            {i.target_minutes}น.
+                          </td>
+                          <td className="px-3 py-1.5">{i.priority}</td>
+                          <td className="px-3 py-1.5">
+                            {resource ? (
+                              <a
+                                href={resource.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`${resource.label} สำหรับ ${i.subject}`}
+                                className={buttonVariants({
+                                  variant: "outline",
+                                  size: "sm",
+                                })}
+                              >
+                                <ExternalLink
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
+                                {resource.label}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

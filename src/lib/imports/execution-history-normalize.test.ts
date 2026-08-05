@@ -96,3 +96,75 @@ describe("normalizeExecutionHistory", () => {
     expect(n.sessions[0]!.durationMinutes).toBe(45);
   });
 });
+
+  it("preserves flat sourceActivityId, assessment scores, and local date", () => {
+    const n = normalizeExecutionHistory(
+      parse({
+        ...base,
+        records: [
+          {
+            date: "2026-08-01",
+            startTime: "09:35",
+            endTime: "09:55",
+            durationMinutes: 20,
+            subject: "A_LEVEL_MATH_1",
+            activityType: "diagnostic",
+            sourceActivityId: "2026-08-01-k001-002-006",
+            assessmentSourceId: "assessment-alevel-math-m110",
+            courseCode: "M110",
+            score: 12,
+            maxScore: 20,
+            correct: 12,
+            totalQuestions: 20,
+          },
+        ],
+      })
+    );
+
+    expect(n.sessions[0]).toMatchObject({
+      sessionDate: "2026-08-01",
+      sourceActivityId: "2026-08-01-k001-002-006",
+      assessmentSourceId: "assessment-alevel-math-m110",
+      activityType: "diagnostic",
+      courseCode: "M110",
+      score: 12,
+      maxScore: 20,
+      correct: 12,
+      totalQuestions: 20,
+    });
+  });
+
+  it("keeps multiple sessions for one sourceActivityId when times differ", () => {
+    const n = normalizeExecutionHistory(
+      parse({
+        ...base,
+        records: [
+          {
+            date: "2026-08-01",
+            subject: "MATHEMATICS",
+            sourceActivityId: "2026-08-01-k001-002-006",
+            startTime: "16:00",
+            endTime: "17:15",
+          },
+          {
+            date: "2026-08-01",
+            subject: "MATHEMATICS",
+            sourceActivityId: "2026-08-01-k001-002-006",
+            startTime: "18:40",
+            endTime: "18:50",
+          },
+          {
+            date: "2026-08-01",
+            subject: "MATHEMATICS",
+            sourceActivityId: "2026-08-01-k001-002-006",
+            startTime: "19:00",
+            endTime: "19:15",
+          },
+        ],
+      })
+    );
+
+    expect(n.sessions).toHaveLength(3);
+    expect(n.totalMinutes).toBe(100);
+    expect(n.duplicatesInFile).toBe(0);
+  });

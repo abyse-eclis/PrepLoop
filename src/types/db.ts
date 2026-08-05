@@ -51,6 +51,8 @@ export interface PlanItem {
   target_minutes: number;
   priority: "high" | "medium" | "low";
   instructions: string | null;
+  resource_url: string | null;
+  resource_label: string | null;
   review_reference_ids: string[] | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -79,6 +81,10 @@ export interface StudySession {
   workspace_id: string;
   plan_item_id: string | null;
   subject: string | null;
+  source_activity_id: string | null;
+  assessment_source_external_id: string | null;
+  activity_type: string | null;
+  course_code: string | null;
   session_date: string;
   start_time: string | null;
   end_time: string | null;
@@ -87,6 +93,12 @@ export interface StudySession {
   actual_lesson_from: string | null;
   actual_lesson_to: string | null;
   note: string | null;
+  score: number | null;
+  max_score: number | null;
+  correct: number | null;
+  incorrect: number | null;
+  total_questions: number | null;
+  import_dedup_key: string | null;
   created_at: string;
   updated_at: string;
 }
