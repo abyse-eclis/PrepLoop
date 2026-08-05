@@ -49,7 +49,25 @@ describe("plan item resources", () => {
 
     expect(resource).toEqual({
       url: "https://youtube.com/watch?v=abc",
-      label: "เปิดลิงก์",
+      label: "เปิดวิดีโอ",
+      sourceName: null,
+      tooltip: "เปิดวิดีโอในแท็บใหม่",
+    });
+  });
+
+  it("labels generic websites as learning sources", () => {
+    expect(
+      getPlanItemResource(
+        planItem({
+          resource_url: "https://example.com/resource",
+          resource_label: "SmartMathPro",
+        })
+      )
+    ).toEqual({
+      url: "https://example.com/resource",
+      label: "เปิดแหล่งเรียน",
+      sourceName: "SmartMathPro",
+      tooltip: "เปิดแหล่งเรียนในแท็บใหม่",
     });
   });
 

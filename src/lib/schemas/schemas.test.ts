@@ -112,6 +112,35 @@ describe("studyPlanSchema", () => {
     );
     expect(parsed.resourceLabel).toBe("เปิดลิงก์");
   });
+  it("keeps old JSON import compatible when resourceUrl is missing", () => {
+    const parsed = planItemSchema.parse({
+      stableExternalId: "2026-08-01-old-json",
+      subject: "TGAT1",
+      activityType: "review",
+      targetMinutes: 60,
+      priority: "medium",
+    });
+
+    expect(parsed.resourceUrl).toBeUndefined();
+  });
+
+  it("accepts new JSON import with resourceUrl", () => {
+    const parsed = planItemSchema.parse({
+      stableExternalId: "2026-08-01-krupone-youtube",
+      subject: "TGAT1",
+      activityType: "review",
+      targetMinutes: 60,
+      priority: "medium",
+      resourceUrl: "https://www.youtube.com/watch?v=0nXxgts-RWc",
+      resourceLabel: "KruP’ONE OpenDurianTCAS",
+    });
+
+    expect(parsed.resourceUrl).toBe(
+      "https://www.youtube.com/watch?v=0nXxgts-RWc"
+    );
+    expect(parsed.resourceLabel).toBe("KruP’ONE OpenDurianTCAS");
+  });
+
   it("rejects non-http resourceUrl", () => {
     const r = planItemSchema.safeParse({
       stableExternalId: "2026-08-01-bad-link",

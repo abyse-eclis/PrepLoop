@@ -145,17 +145,25 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
             </Link>
           ) : null}
           {resource ? (
-            <a
-              href={resource.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${resource.label} สำหรับ ${item.subject}`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              {resource.label}
-            </a>
+            <span className="flex flex-wrap items-center gap-2">
+              {resource.sourceName ? (
+                <span className="text-xs text-muted-foreground">
+                  {resource.sourceName}
+                </span>
+              ) : null}
+              <a
+                href={resource.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${resource.label}สำหรับ ${item.subject}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                title={resource.tooltip}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                {resource.label}
+              </a>
+            </span>
           ) : null}
           <Link href={`/plan?item=${item.stable_external_id}`}>
             <Button size="sm" variant="ghost">
