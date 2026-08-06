@@ -1,3 +1,4 @@
+import { subjectLabel } from "@/lib/subjects";
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { getItemsForDate } from "@/features/plans/data";
@@ -173,7 +174,7 @@ function HistorySessionCard({ session }: { session: StudySession }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{session.subject ?? "ไม่ระบุวิชา"}</span>
+              <span className="font-medium">{subjectLabel(session.subject)}</span>
               {session.course_code ? (
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
                   {session.course_code}

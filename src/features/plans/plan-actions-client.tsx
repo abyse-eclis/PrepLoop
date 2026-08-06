@@ -14,12 +14,18 @@ export function ActivateButton({ versionId }: { versionId: string }) {
   const { toast } = useToast();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="flex items-center gap-2">
       <Button
         size="sm"
         disabled={pending}
-        onClick={() =>
+        onClick={() => {
+          if (!confirming) {
+            setConfirming(true);
+            setMsg("กดอีกครั้งเพื่อยืนยัน แผนวันนี้ที่เริ่มดำเนินการแล้วจะไม่ถูกเปลี่ยน");
+            return;
+          }
           start(async () => {
             const res = await activatePlanVersion({ versionId });
             setMsg(res.ok ? res.message ?? "สำเร็จ" : res.error ?? "ผิดพลาด");
@@ -29,10 +35,11 @@ export function ActivateButton({ versionId }: { versionId: string }) {
                 : { variant: "error", title: "เปิดใช้งานไม่สำเร็จ", description: res.error }
             );
             if (res.ok) router.refresh();
+            setConfirming(false);
           })
-        }
+        }}
       >
-        {pending ? "กำลังเปิดใช้…" : "เปิดใช้เวอร์ชันนี้"}
+        {pending ? "กำลังเปิดใช้…" : confirming ? "ยืนยันใช้เวอร์ชันนี้" : "ใช้เวอร์ชันนี้"}
       </Button>
       {msg ? <span className="text-xs text-muted-foreground">{msg}</span> : null}
     </div>

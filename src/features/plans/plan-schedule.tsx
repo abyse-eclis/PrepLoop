@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PlanItem } from "@/types/db";
+import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
 import { Combobox } from "@/components/ui/combobox";
 import { formatDateKeyThai } from "@/lib/dates";
@@ -66,7 +67,7 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
             onValueChange={(v) => setSubject(v ?? "")}
             options={[
               { value: "", label: "ทุกวิชา" },
-              ...subjects.map((s) => ({ value: s, label: s })),
+              ...subjects.map((s) => ({ value: s, label: subjectLabel(s) })),
             ]}
             placeholder="ทุกวิชา"
             searchable={subjects.length > 8}
@@ -120,7 +121,7 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                       const resource = getPlanItemResource(i);
                       return (
                         <tr key={i.id} className="border-t border-border/60">
-                          <td className="px-3 py-1.5">{i.subject}</td>
+                          <td className="px-3 py-1.5">{subjectLabel(i.subject)}</td>
                           <td className="px-3 py-1.5 text-muted-foreground">
                             {i.course_code ?? "-"}
                             {i.lesson_from ? ` · ${i.lesson_from}` : ""}
@@ -147,7 +148,7 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                                   href={resource.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  aria-label={`${resource.label}สำหรับ ${i.subject}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                                  aria-label={`${resource.label}สำหรับ ${subjectLabel(i.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
                                   title={resource.tooltip}
                                   className={buttonVariants({
                                     variant: "outline",

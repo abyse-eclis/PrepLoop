@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
+import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
 import { StatusBadge } from "@/components/ui/misc";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{item.subject}</span>
+              <span className="font-medium">{subjectLabel(item.subject)}</span>
               {item.course_code ? (
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
                   {item.course_code}
@@ -155,7 +156,7 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
                 href={resource.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`${resource.label}สำหรับ ${item.subject}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                aria-label={`${resource.label}สำหรับ ${subjectLabel(item.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
                 title={resource.tooltip}
                 className={buttonVariants({ variant: "outline", size: "sm" })}
                 onClick={(event) => event.stopPropagation()}

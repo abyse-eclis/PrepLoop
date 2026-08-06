@@ -48,6 +48,8 @@ export interface NormalizedLesson {
   section: string | null;
   orderIndex: number | null;
   prerequisiteLessonIds: string[];
+  lessonUrl: string | null;
+  sourceType: string | null;
 }
 
 export interface NormalizedSourceFile {
@@ -186,6 +188,8 @@ export function normalizeLearningSource(
         section: l.section ?? null,
         orderIndex: l.order ?? null,
         prerequisiteLessonIds: l.prerequisiteLessonIds ?? [],
+        lessonUrl: l.lessonUrl ?? l.url ?? null,
+        sourceType: l.sourceType ?? null,
       });
     }
   }

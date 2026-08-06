@@ -98,6 +98,14 @@ export interface StudySession {
   correct: number | null;
   incorrect: number | null;
   total_questions: number | null;
+  lesson_code?: string | null;
+  lesson_title?: string | null;
+  lesson_url?: string | null;
+  source_type?: string | null;
+  result?: string | null;
+  completed?: boolean | null;
+  video_progress_start?: number | null;
+  video_progress_end?: number | null;
   import_dedup_key: string | null;
   created_at: string;
   updated_at: string;
@@ -113,7 +121,7 @@ export interface AssessmentSource {
   course_code: string | null;
   lesson_from: string | null;
   lesson_to: string | null;
-  source_type: string;
+  source_type?: string;
   source_file_id: string | null;
   question_page_from: number | null;
   question_page_to: number | null;
@@ -153,7 +161,7 @@ export interface AssessmentAttempt {
 export interface ReviewTask {
   id: string;
   workspace_id: string;
-  source_type: string;
+  source_type?: string;
   source_ref: string | null;
   subject: string | null;
   course_code: string | null;
@@ -164,7 +172,7 @@ export interface ReviewTask {
   reason: string | null;
   instructions: string[] | null;
   status: "pending" | "done" | "skipped";
-  result: string | null;
+  result?: string | null;
   next_review_date: string | null;
 }
 
@@ -186,6 +194,8 @@ export interface CourseLesson {
   title: string;
   section: string | null;
   order_index: number | null;
+  lesson_url?: string | null;
+  source_type?: string | null;
 }
 
 export interface SourceFile {

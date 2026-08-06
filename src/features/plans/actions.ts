@@ -5,7 +5,6 @@ import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { addDays, todayInTimezone } from "@/lib/dates";
-import { assertPlanVersionImmutable } from "@/lib/plans/immutable";
 import type { PlanVersion } from "@/types/db";
 
 export interface PlanActionResult {
@@ -48,11 +47,8 @@ export async function activatePlanVersion(
   const version = versionRow as PlanVersion | null;
   if (!version) return { ok: false, error: "ไม่พบเวอร์ชัน" };
 
-  try {
-    assertPlanVersionImmutable(version.status);
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
+  if (version.status === "archived") return { ok: false, error: "ไม่สามารถเปิดใช้เวอร์ชันที่เก็บถาวรแล้ว" };
+  if (version.status === "active") return { ok: true, message: "เวอร์ชันนี้ถูกใช้งานอยู่แล้ว" };
 
   const today = todayInTimezone(workspace.timezone);
   const effectiveFrom =
@@ -86,6 +82,8 @@ export async function activatePlanVersion(
     })
     .eq("id", version.id);
   if (error) return { ok: false, error: error.message };
+
+  await supabase.from("plan_activation_events").insert({ workspace_id: workspace.id, from_version_id: workspace.active_plan_version_id, to_version_id: version.id, effective_from: effectiveFrom });
 
   await supabase
     .from("workspaces")
