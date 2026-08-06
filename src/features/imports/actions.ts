@@ -345,22 +345,26 @@ export async function importLearningSource(raw: string): Promise<ImportResult> {
         section: l.section,
         order_index: l.orderIndex,
         prerequisite_lesson_ids: l.prerequisiteLessonIds,
+        lesson_url: l.lessonUrl,
+        source_type: l.sourceType,
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
   // Classify lessons new/updated/unchanged.
   const courseIds = Array.from(courseIdByCode.values());
-  const existingLessons = new Map<string, { lesson_number: string; title: string }>();
+  const existingLessons = new Map<string, { lesson_number: string; title: string; lesson_url: string | null; source_type: string | null }>();
   if (courseIds.length > 0) {
     const { data: existLessons } = await supabase
       .from("course_lessons")
-      .select("course_id, external_id, lesson_number, title")
+      .select("course_id, external_id, lesson_number, title, lesson_url, source_type")
       .in("course_id", courseIds);
-    for (const l of (existLessons as Array<{ course_id: string; external_id: string; lesson_number: string; title: string }> | null) ?? []) {
+    for (const l of (existLessons as Array<{ course_id: string; external_id: string; lesson_number: string; title: string; lesson_url: string | null; source_type: string | null }> | null) ?? []) {
       existingLessons.set(`${l.course_id}::${l.external_id}`, {
         lesson_number: l.lesson_number,
         title: l.title,
+        lesson_url: l.lesson_url,
+        source_type: l.source_type,
       });
     }
   }
@@ -369,7 +373,7 @@ export async function importLearningSource(raw: string): Promise<ImportResult> {
     existing: existingLessons,
     keyOf: (l) => `${l.course_id}::${l.external_id}`,
     signatureIncoming: (l) => `${l.lesson_number}|${l.title}`,
-    signatureExisting: (l) => `${l.lesson_number}|${l.title}`,
+    signatureExisting: (l) => `${l.lesson_number}|${l.title}|${l.lesson_url ?? ""}|${l.source_type ?? ""}`,
   });
 
   let batchNo = 0;

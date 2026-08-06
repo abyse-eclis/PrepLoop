@@ -73,10 +73,15 @@ export async function getItemsForDate(
   workspaceId: string,
   date: string
 ): Promise<{ version: PlanVersion | null; items: ResolvedPlanItem[] }> {
-  const version = await resolveVersionForDate(workspaceId, date);
+  const supabase = await createServerSupabase();
+  const { data: snap } = await supabase.from("daily_plan_snapshots").select("plan_version_id").eq("workspace_id", workspaceId).eq("snapshot_date", date).maybeSingle();
+  let version = snap?.plan_version_id ? null : await resolveVersionForDate(workspaceId, date);
+  if (snap?.plan_version_id) {
+    const { data: snapVersion } = await supabase.from("study_plan_versions").select("*").eq("id", snap.plan_version_id).maybeSingle();
+    version = snapVersion as PlanVersion | null;
+  }
   if (!version) return { version: null, items: [] };
 
-  const supabase = await createServerSupabase();
   const { data: itemRows } = await supabase
     .from("study_plan_items")
     .select("*")

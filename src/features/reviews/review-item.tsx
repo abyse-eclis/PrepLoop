@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { updateReview } from "./actions";
+import { subjectLabel } from "@/lib/subjects";
 import type { ReviewTask } from "@/types/db";
 
 export function ReviewItem({ review }: { review: ReviewTask }) {
@@ -40,7 +41,7 @@ export function ReviewItem({ review }: { review: ReviewTask }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">
-            {review.subject ?? "ทบทวน"}
+            {subjectLabel(review.subject)}
             {review.course_code ? ` · ${review.course_code}` : ""}
             {review.lesson_from
               ? ` · คลิป ${review.lesson_from}${

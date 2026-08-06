@@ -1,3 +1,4 @@
+import { subjectLabel } from "@/lib/subjects";
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { todayInTimezone } from "@/lib/dates";
@@ -181,7 +182,7 @@ async function RangeView({
                   return (
                     <div key={s.subject}>
                       <div className="flex justify-between text-xs">
-                        <span>{s.subject}</span>
+                        <span>{subjectLabel(s.subject)}</span>
                         <span className="tabular-nums">{s.minutes}น.</span>
                       </div>
                       <Progress value={(s.minutes / max) * 100} />

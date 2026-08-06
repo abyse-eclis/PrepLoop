@@ -13,6 +13,16 @@ export interface ActionResult {
   message?: string;
 }
 
+async function ensureDailySnapshot(workspaceId: string, planItemId: string, reason: string) {
+  const supabase = await createServerSupabase();
+  const { data: item } = await supabase.from("study_plan_items").select("plan_version_id, date").eq("id", planItemId).eq("workspace_id", workspaceId).maybeSingle();
+  if (!item) return;
+  const { data: existing } = await supabase.from("daily_plan_snapshots").select("id").eq("workspace_id", workspaceId).eq("snapshot_date", item.date).maybeSingle();
+  if (existing) return;
+  const { data: items } = await supabase.from("study_plan_items").select("id, stable_external_id, subject, course_code, lesson_from, lesson_to, activity_type, target_minutes, priority, instructions").eq("workspace_id", workspaceId).eq("plan_version_id", item.plan_version_id).eq("date", item.date).order("priority", { ascending: true });
+  await supabase.from("daily_plan_snapshots").insert({ workspace_id: workspaceId, snapshot_date: item.date, plan_version_id: item.plan_version_id, payload: { items: items ?? [] }, started_reason: reason });
+}
+
 async function ownedPlanItem(planItemId: string, workspaceId: string) {
   const supabase = await createServerSupabase();
   const { data } = await supabase
@@ -85,6 +95,7 @@ export async function addTimeIntervals(
     };
   });
 
+  await ensureDailySnapshot(workspace.id, item.id, "study_session");
   const { error } = await supabase.from("study_sessions").insert(rows);
   if (error) return { ok: false, error: error.message };
 
@@ -115,6 +126,7 @@ export async function setItemStatus(
   if (!item) return { ok: false, error: "ไม่พบรายการหรือไม่มีสิทธิ์เข้าถึง" };
 
   const supabase = await createServerSupabase();
+  await ensureDailySnapshot(workspace.id, item.id, "status_change");
   const { error } = await supabase.from("item_status_overrides").upsert(
     {
       workspace_id: workspace.id,

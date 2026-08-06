@@ -8,6 +8,9 @@ export const lessonSchema = z.object({
   section: z.string().optional(),
   order: z.number().optional(),
   prerequisiteLessonIds: z.array(z.string()).optional(),
+  url: z.string().url().optional(),
+  lessonUrl: z.string().url().optional(),
+  sourceType: z.string().optional(),
 });
 
 export const courseSectionSchema = z.object({

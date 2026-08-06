@@ -1,5 +1,6 @@
 "use client";
 
+import { subjectLabel } from "@/lib/subjects";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +33,7 @@ export function SourceCard({
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              วิชา {source.subject}
+              วิชา {subjectLabel(source.subject)}
               {source.course_code ? ` · คอร์ส ${source.course_code}` : ""}
               {source.lesson_from
                 ? ` · คลิป ${source.lesson_from}${
@@ -73,7 +74,7 @@ export function SourceCard({
           open={open}
           onOpenChange={setOpen}
           title={`กรอกผล — ${source.title}`}
-          description={`วิชา ${source.subject} · เกณฑ์ผ่าน ${source.passing_percentage}%`}
+          description={`วิชา ${subjectLabel(source.subject)} · เกณฑ์ผ่าน ${source.passing_percentage}%`}
         >
           <ResultForm
             subject={source.subject}
