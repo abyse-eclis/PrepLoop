@@ -79,6 +79,7 @@ npm run build       # production build
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role (server-only, ห้าม expose) |
 | `ANTHROPIC_API_KEY` | (ไม่บังคับ) ไม่ใส่ = mock recovery |
+| `ANTHROPIC_REVIEW_MODEL` | model สำหรับวิเคราะห์และสร้างแบบทบทวน (ค่าเริ่มต้น `claude-haiku-4-5-20251001`) |
 | `ANTHROPIC_RECOVERY_MODEL` | ชื่อ model เช่น `claude-haiku-4-5-20251001` |
 | `NEXT_PUBLIC_APP_URL` | URL ของแอป |
 | `MAX_UPLOAD_SIZE_MB` / `NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB` | ขนาดไฟล์สูงสุด |
@@ -99,8 +100,8 @@ SELECT/INSERT/DELETE — ไม่มี update flow ในระดับ appli
 
 ### Anthropic Setup
 
-- Recovery endpoint เรียก Claude จากฝั่ง server เท่านั้น
-- อ่านชื่อ model จาก `ANTHROPIC_RECOVERY_MODEL` (อย่า hardcode)
+- Recovery และ Review endpoint เรียก Claude จากฝั่ง server เท่านั้น
+- อ่านชื่อ model จาก `ANTHROPIC_RECOVERY_MODEL` และ `ANTHROPIC_REVIEW_MODEL` (อย่า hardcode)
 - ถ้าไม่ตั้ง `ANTHROPIC_API_KEY` ระบบจะใช้ **mock recovery** แบบ rule-based และแสดงป้าย “MOCK (ไม่ใช่ AI จริง)”
 
 ## Vercel Deployment
