@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const client = new Anthropic({ apiKey: env.anthropicApiKey });
     const isTest = parsed.data.mode === "test";
     const message = await client.messages.create({
-      model: "claude-3-5-haiku-latest",
+      model: env.anthropicReviewModel,
       max_tokens: isTest ? 16 : 1200,
       system: "ตอบภาษาไทย กระชับ และอ้างอิงเฉพาะข้อมูลที่ผู้ใช้ส่งมาเท่านั้น",
       messages: [{ role: "user", content: isTest ? "ตอบว่า API พร้อมใช้งาน" : JSON.stringify(parsed.data.summary).slice(0, 12000) }],

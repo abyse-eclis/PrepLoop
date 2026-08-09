@@ -26,6 +26,8 @@ export function serverEnv() {
     supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    anthropicReviewModel:
+      process.env.ANTHROPIC_REVIEW_MODEL ?? "claude-haiku-4-5-20251001",
     anthropicRecoveryModel:
       process.env.ANTHROPIC_RECOVERY_MODEL ?? "claude-haiku-4-5-20251001",
   };
