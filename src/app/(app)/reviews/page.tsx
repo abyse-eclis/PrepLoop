@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { todayInTimezone, addDays } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/misc";
+import { EmptyState, Stat } from "@/components/ui/misc";
 import { ReviewItem } from "@/features/reviews/review-item";
+import { getReviewPageData } from "@/features/reviews/data";
+import { RecoveryPanel } from "@/features/plans/plan-actions-client";
 import type { ReviewTask } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +27,9 @@ export default async function ReviewsPage() {
   }
 
   const today = todayInTimezone(workspace.timezone);
-  const supabase = await createServerSupabase();
-  const { data } = await supabase
-    .from("review_tasks")
-    .select("*")
-    .eq("workspace_id", workspace.id)
-    .order("due_date", { ascending: true });
-  const reviews = (data as ReviewTask[] | null) ?? [];
+  const data = await getReviewPageData(workspace.id, today);
 
-  const pending = reviews.filter((r) => r.status === "pending");
+  const pending = data.pendingReviews;
   const buckets: Array<{ key: string; label: string; items: ReviewTask[] }> = [
     { key: "overdue", label: "เกินกำหนด", items: pending.filter((r) => r.due_date < today) },
     { key: "today", label: "วันนี้", items: pending.filter((r) => r.due_date === today) },
@@ -64,21 +59,50 @@ export default async function ReviewsPage() {
     },
   ];
 
-  const done = reviews.filter((r) => r.status !== "pending").slice(0, 20);
+  const done = data.recentDone;
 
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-bold">งานทบทวน</h1>
         <p className="text-sm text-muted-foreground">
-          ทบทวนตามรอบ spaced repetition และบันทึกผล
+          ทบทวนตามรอบ spaced repetition และวิเคราะห์จุดอ่อนจากข้อมูลจริงเมื่อกดสั่งงาน
         </p>
       </header>
 
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat
+          label="Study Session"
+          value={data.evidence.studySessions}
+          hint="พร้อมใช้เป็น evidence"
+        />
+        <Stat
+          label="Quiz / Mock"
+          value={data.evidence.assessmentAttempts}
+          hint="ผลสอบที่บันทึกแล้ว"
+        />
+        <Stat
+          label="Weakness"
+          value={data.evidence.weaknesses}
+          hint="จาก topic/error logs"
+        />
+        <Stat
+          label="Review pending"
+          value={data.evidence.pendingReviews}
+          hint="ไม่ได้โหลด raw notes"
+        />
+      </section>
+
+      <RecoveryPanel
+        title="วิเคราะห์จุดอ่อน"
+        description="ระบบจะค่อย fetch evidence และสร้าง preview ของแผนทบทวนเพิ่มเติมเมื่อกดวิเคราะห์เท่านั้น"
+        actionLabel="วิเคราะห์จุดอ่อน"
+      />
+
       {pending.length === 0 ? (
         <EmptyState
-          title="ไม่มีงานทบทวนที่ค้าง"
-          description="งานทบทวนจะถูกสร้างอัตโนมัติเมื่อเรียนเสร็จหรือบันทึกผลข้อสอบ"
+          title="ยังไม่มีแผนทบทวน"
+          description="เมื่อมีข้อมูลการเรียนหรือผลแบบทดสอบ สามารถให้ระบบวิเคราะห์จุดอ่อนและสร้างแผนทบทวนเพิ่มเติมได้"
         />
       ) : (
         buckets

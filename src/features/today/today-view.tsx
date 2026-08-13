@@ -1,37 +1,33 @@
 import Link from "next/link";
-import type { Workspace, PlanVersion } from "@/types/db";
-import type { ResolvedPlanItem } from "@/features/plans/data";
-import { daySummary } from "@/lib/calculations";
+import type { Workspace, ReviewTask } from "@/types/db";
+import type { QueuePlanItem, TodayStudyQueue } from "@/features/today/data";
+import { timeCompletion } from "@/lib/calculations";
 import { formatDateKeyThai } from "@/lib/dates";
 import { Stat, EmptyState, Progress } from "@/components/ui/misc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "./item-row";
-
-const COMPLETED_STATUSES = ["completed"];
+import { ReviewItem } from "@/features/reviews/review-item";
 
 export function TodayView({
   workspace,
   date,
-  version,
-  items,
-  dueReviewCount,
+  queue,
 }: {
   workspace: Workspace;
   date: string;
-  version: PlanVersion | null;
-  items: ResolvedPlanItem[];
-  dueReviewCount: number;
+  queue: TodayStudyQueue;
 }) {
-  const summary = daySummary({
-    items: items.map((r) => ({
-      priority: r.item.priority,
-      targetMinutes: r.item.target_minutes,
-      status: r.status,
-    })),
-    actualMinutesByItem: items.map((r) => r.actualMinutes),
-    completedStatuses: COMPLETED_STATUSES,
-  });
+  const summary = queue.summary;
+  const time = timeCompletion(
+    summary.actualMinutesToday,
+    summary.plannedTargetMinutes
+  );
+  const hasQueue =
+    queue.overdue.length > 0 ||
+    queue.today.length > 0 ||
+    queue.supplementary.length > 0 ||
+    queue.next.length > 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -43,10 +39,10 @@ export function TodayView({
           </p>
         </div>
         <div className="text-right text-sm">
-          {version ? (
+          {queue.version ? (
             <span className="text-muted-foreground">
-              แผน: <span className="text-foreground">{version.name}</span> (v
-              {version.version_number})
+              แผน: <span className="text-foreground">{queue.version.name}</span> (v
+              {queue.version.version_number})
             </span>
           ) : (
             <span className="text-muted-foreground">ยังไม่มีแผนที่ active</span>
@@ -57,33 +53,38 @@ export function TodayView({
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Stat
           label="เวลาเป้าหมาย"
-          value={`${summary.targetMinutes} นาที`}
-          hint={`${(summary.targetMinutes / 60).toFixed(1)} ชม.`}
+          value={`${summary.plannedTargetMinutes} นาที`}
+          hint="เป้าหมาย ไม่ใช่ hard limit"
         />
         <Stat
-          label="เวลาจริง"
-          value={`${summary.actualMinutes} นาที`}
+          label="เวลาจริงวันนี้"
+          value={`${summary.actualMinutesToday} นาที`}
           hint={
-            summary.time.overMinutes > 0
-              ? `เกินเป้า ${summary.time.overMinutes} นาที`
-              : `${(summary.actualMinutes / 60).toFixed(1)} ชม.`
+            summary.overTargetMinutes > 0
+              ? `เกินเป้า ${summary.overTargetMinutes} นาที`
+              : `เหลือประมาณ ${summary.remainingTargetMinutes} นาที`
           }
         />
-        <Stat label="Time completion" value={`${summary.time.percent}%`} />
         <Stat
-          label="Task completion"
-          value={`${summary.taskCompletionPercent}%`}
-          hint={`${summary.completedItems}/${summary.totalItems} งาน`}
+          label="งานวันนี้"
+          value={`${summary.todayCompletedItems}/${summary.todayTotalItems}`}
+          hint="นับตาม planned date วันนี้"
         />
-        <Stat
-          label="Weighted completion"
-          value={`${summary.weightedCompletionPercent}%`}
-        />
-        <Stat label="งานค้าง" value={summary.pendingItems} />
+        <Stat label="งานค้าง" value={queue.overdue.length} />
         <Stat
           label="ทบทวนถึงกำหนด"
-          value={dueReviewCount}
-          hint={dueReviewCount > 0 ? "ไปที่หน้าทบทวน" : "ไม่มีค้าง"}
+          value={queue.supplementary.length}
+          hint={queue.supplementary.length > 0 ? "เลือกทำได้ทันที" : "ไม่มีค้าง"}
+        />
+        <Stat
+          label="เรียนต่อได้"
+          value={queue.next.length}
+          hint="รายการจริงจากแผนถัดไป"
+        />
+        <Stat
+          label="Sessions วันนี้"
+          value={summary.sessionCountToday}
+          hint="นับจาก actual date"
         />
         <Stat
           label="Nap เป้าหมาย"
@@ -96,43 +97,110 @@ export function TodayView({
           <CardTitle>ความคืบหน้าเวลาวันนี้</CardTitle>
         </CardHeader>
         <CardContent>
-          <Progress value={summary.time.percent} />
+          <Progress value={time.percent} />
           <p className="mt-2 text-xs text-muted-foreground">
-            {summary.actualMinutes} / {summary.targetMinutes} นาที (
-            {summary.time.percent}%)
-            {summary.time.overMinutes > 0
-              ? ` · เกินเป้า ${summary.time.overMinutes} นาที`
-              : ""}
+            {summary.actualMinutesToday} / {summary.plannedTargetMinutes} นาที (
+            {time.rawPercent}%)
+            {summary.overTargetMinutes > 0
+              ? ` · เกินเป้า ${summary.overTargetMinutes} นาที`
+              : summary.remainingTargetMinutes > 0
+                ? ` · เหลืออีกประมาณ ${summary.remainingTargetMinutes} นาที`
+                : ""}
           </p>
         </CardContent>
       </Card>
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
-          ตารางวันนี้
-        </h2>
-        {items.length === 0 ? (
-          <EmptyState
-            title="ไม่มีรายการสำหรับวันนี้"
-            description={
-              version
-                ? "แผนที่ active ไม่มีงานในวันนี้ หรือยังไม่ได้ import ตารางสำหรับวันนี้"
-                : "ยังไม่มีแผนที่ active — นำเข้าและเปิดใช้แผน"
-            }
-            action={
-              <Link href="/imports">
-                <Button variant="outline">นำเข้าแผน</Button>
-              </Link>
-            }
+      {!hasQueue ? (
+        <EmptyState
+          title="ยังไม่มีรายการเรียนสำหรับวันนี้"
+          description={
+            queue.version
+              ? "ยังไม่มีงานค้าง งานวันนี้ งานทบทวน หรือรายการเรียนต่อจากแผน"
+              : "ยังไม่มีแผนที่ active — นำเข้าและเปิดใช้แผน"
+          }
+          action={
+            <Link href="/imports">
+              <Button variant="outline">นำเข้าแผน</Button>
+            </Link>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-5">
+          <QueueSection
+            title="งานค้าง"
+            description="planned date ยังเป็นวันเดิม แต่เรียนจริงวันนี้ได้"
+            items={queue.overdue}
+            date={date}
           />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {items.map((row) => (
-              <ItemRow key={row.item.id} row={row} date={date} />
-            ))}
-          </div>
-        )}
-      </section>
+          <QueueSection
+            title="วันนี้"
+            description="รายการที่ planned date ตรงกับวันนี้"
+            items={queue.today}
+            date={date}
+          />
+          <ReviewSection reviews={queue.supplementary} />
+          <QueueSection
+            title="เรียนต่อได้"
+            description="รายการถัดไปจากแผนจริง ใช้เมื่อยังมีเวลาและอยากเรียนล่วงหน้า"
+            items={queue.next}
+            date={date}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+function QueueSection({
+  title,
+  description,
+  items,
+  date,
+}: {
+  title: string;
+  description: string;
+  items: QueuePlanItem[];
+  date: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          {title} ({items.length})
+        </h2>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <div className="flex flex-col gap-3">
+        {items.map((row) => (
+          <ItemRow key={row.item.id} row={row} date={date} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReviewSection({ reviews }: { reviews: ReviewTask[] }) {
+  if (reviews.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          ทบทวน ({reviews.length})
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          งานทบทวน active ที่ถึงกำหนดแล้ว
+        </p>
+      </div>
+      <Card>
+        <CardContent className="flex flex-col gap-2 pt-4">
+          {reviews.map((review) => (
+            <ReviewItem key={review.id} review={review} />
+          ))}
+        </CardContent>
+      </Card>
+    </section>
   );
 }

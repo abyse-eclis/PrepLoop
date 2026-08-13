@@ -32,7 +32,15 @@ export function ActivateButton({ versionId }: { versionId: string }) {
   );
 }
 
-export function RecoveryPanel() {
+export function RecoveryPanel({
+  title = "ขอ Recovery Plan",
+  description = "เมื่อทำตามแผนไม่ได้หรือพบจุดอ่อน ระบบจะประเมินและสร้าง Recovery Plan เป็นเวอร์ชันใหม่ (เวอร์ชันเดิมยังคงอยู่และแก้ไม่ได้)",
+  actionLabel = "ขอ Recovery",
+}: {
+  title?: string;
+  description?: string;
+  actionLabel?: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [preview, setPreview] = useState<{
@@ -81,16 +89,13 @@ export function RecoveryPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>ขอ Recovery Plan</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          เมื่อทำตามแผนไม่ได้หรือพบจุดอ่อน ระบบจะประเมินและสร้าง Recovery Plan
-          เป็นเวอร์ชันใหม่ (เวอร์ชันเดิมยังคงอยู่และแก้ไม่ได้)
-        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
         <div>
           <Button onClick={ask} disabled={pending} variant="secondary">
-            {pending ? "กำลังประมวลผล…" : "ขอ Recovery"}
+            {pending ? "กำลังประมวลผล…" : actionLabel}
           </Button>
         </div>
 

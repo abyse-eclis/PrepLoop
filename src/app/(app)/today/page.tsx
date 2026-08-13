@@ -1,6 +1,5 @@
 import { getActiveWorkspace } from "@/lib/auth/workspace";
-import { getItemsForDate } from "@/features/plans/data";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { getStudyQueue } from "@/features/today/data";
 import { todayInTimezone } from "@/lib/dates";
 import { TodayView } from "@/features/today/today-view";
 import { EmptyState } from "@/components/ui/misc";
@@ -26,24 +25,13 @@ export default async function TodayPage() {
   }
 
   const today = todayInTimezone(workspace.timezone);
-  const { version, items } = await getItemsForDate(workspace.id, today);
-
-  // Nap actual: sum of sessions with subject 'nap' isn't tracked separately in MVP.
-  const supabase = await createServerSupabase();
-  const { count: dueReviews } = await supabase
-    .from("review_tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspace.id)
-    .eq("status", "pending")
-    .lte("due_date", today);
+  const queue = await getStudyQueue(workspace.id, today);
 
   return (
     <TodayView
       workspace={workspace}
       date={today}
-      version={version}
-      items={items}
-      dueReviewCount={dueReviews ?? 0}
+      queue={queue}
     />
   );
 }

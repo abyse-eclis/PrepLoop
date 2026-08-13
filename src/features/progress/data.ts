@@ -25,21 +25,17 @@ export async function getDailyProgress(
   date: string
 ): Promise<DailyProgress> {
   const { version, items } = await getItemsForDate(workspaceId, date);
-  const summary = daySummary({
-    items: items.map((r) => ({
-      priority: r.item.priority,
-      targetMinutes: r.item.target_minutes,
-      status: r.status,
-    })),
-    actualMinutesByItem: items.map((r) => r.actualMinutes),
-  });
 
   const supabase = await createServerSupabase();
-  const [{ count: sessionCount }, { count: reviewDue }, { count: attemptCount }] =
+  const [
+    { data: sessionRows, count: sessionCount },
+    { count: reviewDue },
+    { count: attemptCount },
+  ] =
     await Promise.all([
       supabase
         .from("study_sessions")
-        .select("id", { count: "exact", head: true })
+        .select("duration_minutes", { count: "exact" })
         .eq("workspace_id", workspaceId)
         .eq("session_date", date),
       supabase
@@ -54,6 +50,17 @@ export async function getDailyProgress(
         .eq("workspace_id", workspaceId)
         .eq("attempt_date", date),
     ]);
+  const actualMinutes = (
+    (sessionRows as Array<{ duration_minutes: number }> | null) ?? []
+  ).reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
+  const summary = daySummary({
+    items: items.map((r) => ({
+      priority: r.item.priority,
+      targetMinutes: r.item.target_minutes,
+      status: r.status,
+    })),
+    actualMinutesByItem: [actualMinutes],
+  });
 
   return {
     date,
