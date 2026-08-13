@@ -6,24 +6,55 @@ import {
   priorityEnum,
 } from "./common";
 
-export const planItemSchema = z.object({
-  stableExternalId: z.string().min(1),
-  subject: z.string().min(1),
-  courseCode: z.string().nullable().optional(),
-  lessonFrom: z.string().nullable().optional(),
-  lessonTo: z.string().nullable().optional(),
-  activityType: activityTypeEnum,
-  assessmentSourceId: z.string().nullable().optional(),
-  targetMinutes: z.number().int().min(0),
-  priority: priorityEnum.default("medium"),
-  instructions: z.string().optional().default(""),
-  reviewReferenceIds: z.array(z.string()).optional().default([]),
-  metadata: z.record(z.string(), z.any()).optional(),
-});
+const resourceUrlSchema = z
+  .string()
+  .refine(
+    (value) => value.startsWith("http://") || value.startsWith("https://"),
+    {
+      message: "resourceUrl ต้องขึ้นต้นด้วย http:// หรือ https://",
+    }
+  );
+
+export const planItemSchema = z
+  .object({
+    stableExternalId: z.string().min(1),
+    subject: z.string().min(1),
+    courseCode: z.string().nullable().optional(),
+    lessonFrom: z.string().nullable().optional(),
+    lessonTo: z.string().nullable().optional(),
+    activityType: activityTypeEnum,
+    assessmentSourceId: z.string().nullable().optional(),
+    targetMinutes: z.number().int().min(0),
+    priority: priorityEnum.default("medium"),
+    instructions: z.string().optional().default(""),
+    resourceUrl: resourceUrlSchema.optional(),
+    resourceLabel: z.string().optional(),
+    reviewReferenceIds: z.array(z.string()).optional().default([]),
+    metadata: z.record(z.string(), z.any()).optional(),
+  })
+  .transform((item) => {
+    const fallbackResourceUrl =
+      typeof item.metadata?.videoUrl === "string" &&
+      (item.metadata.videoUrl.startsWith("http://") ||
+        item.metadata.videoUrl.startsWith("https://"))
+        ? item.metadata.videoUrl
+        : typeof item.metadata?.resourceUrl === "string" &&
+            (item.metadata.resourceUrl.startsWith("http://") ||
+              item.metadata.resourceUrl.startsWith("https://"))
+          ? item.metadata.resourceUrl
+          : undefined;
+    const resourceUrl = item.resourceUrl ?? fallbackResourceUrl;
+    if (!resourceUrl) return item;
+    return {
+      ...item,
+      resourceUrl,
+      resourceLabel: item.resourceLabel ?? "เปิดลิงก์",
+    };
+  });
 
 export const planDaySchema = z.object({
   date: dateString,
-  targetMinutes: z.number().int().min(0),
+    targetMinutes: z.number().int().min(0),
   napTargetMinutes: z.number().int().min(0).optional().default(0),
   notes: z.string().optional().default(""),
   items: z.array(planItemSchema).default([]),

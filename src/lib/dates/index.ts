@@ -41,6 +41,22 @@ export function timeToMinutes(time: string): number {
   return h! * 60 + m!;
 }
 
+/** Alias for timeToMinutes — the canonical parser. Never uses locale/Date. */
+export function parseTimeToMinutes(time: string): number {
+  return timeToMinutes(time);
+}
+
+/** Format minutes-since-midnight as 24h HH:mm (wraps past 24h for display). */
+export function formatMinutesToTime(minutes: number): string {
+  const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** A single interval crossing midnight can be at most this long (16h). */
+export const MAX_SESSION_MINUTES = 16 * 60;
+
 /**
  * Compute duration in minutes between two HH:MM times on the same day.
  * end must be strictly after start (no cross-midnight support here).
@@ -55,57 +71,112 @@ export function durationMinutes(start: string, end: string): number {
 }
 
 export interface TimeInterval {
-  start: string; // HH:MM
-  end: string; // HH:MM
+  start: string; // HH:MM (24h)
+  end: string; // HH:MM (24h)
+}
+
+export interface IntervalDetail {
+  start: string;
+  end: string;
+  minutes: number;
+  crossesMidnight: boolean;
 }
 
 export interface IntervalValidationResult {
   ok: boolean;
   totalMinutes: number;
   errors: string[];
+  details: IntervalDetail[];
 }
 
 /**
- * Validate a set of intervals and compute total minutes.
- * Detects invalid times, end<=start, and overlaps.
+ * Validate a set of 24h HH:MM intervals and compute total minutes.
+ *
+ * Cross-midnight support: if end <= start, the interval is interpreted as
+ * ending the NEXT day (e.g. 23:38–00:50 = 72 min), as long as the resulting
+ * duration does not exceed MAX_SESSION_MINUTES (16h) — beyond that it is far
+ * more likely a mistake than a real overnight session, so it is rejected with a
+ * clear message instead of silently spanning ~a full day.
+ *
+ * Overlaps are detected on ABSOLUTE minute ranges (cross-midnight intervals use
+ * end + 1440), so touching endpoints (23:30–00:30 then 00:30–01:00) do NOT
+ * count as overlaps. Each distinct problem is reported exactly once.
  */
 export function validateIntervals(
   intervals: TimeInterval[]
 ): IntervalValidationResult {
-  const errors: string[] = [];
+  const errorSet = new Set<string>();
   if (intervals.length === 0) {
-    return { ok: false, totalMinutes: 0, errors: ["ต้องมีอย่างน้อยหนึ่งช่วงเวลา"] };
+    return {
+      ok: false,
+      totalMinutes: 0,
+      errors: ["ต้องมีอย่างน้อยหนึ่งช่วงเวลา"],
+      details: [],
+    };
   }
 
   const ranges: Array<{ start: number; end: number; raw: TimeInterval }> = [];
+  const details: IntervalDetail[] = [];
+
   for (const iv of intervals) {
     if (!isValidTimeString(iv.start) || !isValidTimeString(iv.end)) {
-      errors.push(`รูปแบบเวลาไม่ถูกต้อง: ${iv.start}–${iv.end}`);
+      errorSet.add(`รูปแบบเวลาไม่ถูกต้อง (ต้องเป็น HH:MM 24 ชม.): ${iv.start || "?"}–${iv.end || "?"}`);
       continue;
     }
     const s = timeToMinutes(iv.start);
-    const e = timeToMinutes(iv.end);
-    if (e <= s) {
-      errors.push(`เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม: ${iv.start}–${iv.end}`);
+    let e = timeToMinutes(iv.end);
+    let crossesMidnight = false;
+
+    if (e === s) {
+      errorSet.add(`เวลาเริ่มและสิ้นสุดต้องไม่เท่ากัน: ${iv.start}–${iv.end}`);
       continue;
     }
+    if (e < s) {
+      // Candidate cross-midnight interpretation.
+      const overnight = e + 1440;
+      if (overnight - s > MAX_SESSION_MINUTES) {
+        errorSet.add(
+          `เวลาสิ้นสุด (${iv.end}) ต้องอยู่หลังเวลาเริ่ม (${iv.start}) — หากตั้งใจเรียนข้ามคืน ช่วงต้องไม่เกิน ${MAX_SESSION_MINUTES / 60} ชม.`
+        );
+        continue;
+      }
+      e = overnight;
+      crossesMidnight = true;
+    }
+
     ranges.push({ start: s, end: e, raw: iv });
+    details.push({
+      start: iv.start,
+      end: iv.end,
+      minutes: e - s,
+      crossesMidnight,
+    });
   }
 
-  // Overlap detection
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  // Overlap + duplicate detection on absolute minute ranges (sorted by start).
+  const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1]!;
     const cur = sorted[i]!;
+    if (prev.start === cur.start && prev.end === cur.end) {
+      errorSet.add(`มีช่วงเวลาซ้ำกัน: ${cur.raw.start}–${cur.raw.end}`);
+      continue;
+    }
+    // Touching endpoints (cur.start === prev.end) are allowed.
     if (cur.start < prev.end) {
-      errors.push(
+      errorSet.add(
         `ช่วงเวลาซ้อนกัน: ${prev.raw.start}–${prev.raw.end} และ ${cur.raw.start}–${cur.raw.end}`
       );
     }
   }
 
   const totalMinutes = ranges.reduce((sum, r) => sum + (r.end - r.start), 0);
-  return { ok: errors.length === 0, totalMinutes, errors };
+  return {
+    ok: errorSet.size === 0,
+    totalMinutes,
+    errors: Array.from(errorSet),
+    details,
+  };
 }
 
 /**

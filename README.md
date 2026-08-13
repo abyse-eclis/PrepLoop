@@ -79,16 +79,18 @@ npm run build       # production build
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role (server-only, ห้าม expose) |
 | `ANTHROPIC_API_KEY` | (ไม่บังคับ) ไม่ใส่ = mock recovery |
+| `ANTHROPIC_REVIEW_MODEL` | model สำหรับวิเคราะห์และสร้างแบบทบทวน (ค่าเริ่มต้น `claude-haiku-4-5-20251001`) |
 | `ANTHROPIC_RECOVERY_MODEL` | ชื่อ model เช่น `claude-haiku-4-5-20251001` |
 | `NEXT_PUBLIC_APP_URL` | URL ของแอป |
 | `MAX_UPLOAD_SIZE_MB` / `NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB` | ขนาดไฟล์สูงสุด |
 
 ### Storage Setup
 
-- Bucket ชื่อ `study-sources` (private) ถูกสร้างโดย `0003_storage.sql`
-- อัปโหลดผ่าน server action ที่ validate MIME + size และ sanitize ชื่อไฟล์
-- path = `{workspace_id}/{uuid}-{filename}` — storage policy อนุญาตเฉพาะเจ้าของ workspace
-- เปิดไฟล์ผ่าน signed URL อายุ 10 นาที
+- Bucket ชื่อ `study-sources` (private) ถูกสร้างโดย `0003_storage.sql` และ hardened เพิ่มใน `0004_source_files.sql`
+- อัปโหลดหลายไฟล์พร้อมกันผ่าน server action ที่ validate MIME + นามสกุล + size, คำนวณ SHA-256 (dedupe เนื้อหาซ้ำ) และ cleanup object หาก DB insert ล้มเหลว
+- storage key = `workspaces/{workspaceId}/learning-sources/{uuid}.{ext}` (ไม่ใช้ชื่อไฟล์ผู้ใช้เป็น key) — เก็บ `original_file_name`/`display_name` ไว้ในฐานข้อมูลเพื่อแสดงผล
+- storage RLS ดึง workspace id จาก path ด้วย `storage_workspace_id()` และตรวจ `owns_workspace()`
+- เปิด/ดาวน์โหลดไฟล์ผ่าน signed URL อายุ 10 นาที
 
 ### RLS Note
 
@@ -98,8 +100,8 @@ SELECT/INSERT/DELETE — ไม่มี update flow ในระดับ appli
 
 ### Anthropic Setup
 
-- Recovery endpoint เรียก Claude จากฝั่ง server เท่านั้น
-- อ่านชื่อ model จาก `ANTHROPIC_RECOVERY_MODEL` (อย่า hardcode)
+- Recovery และ Review endpoint เรียก Claude จากฝั่ง server เท่านั้น
+- อ่านชื่อ model จาก `ANTHROPIC_RECOVERY_MODEL` และ `ANTHROPIC_REVIEW_MODEL` (อย่า hardcode)
 - ถ้าไม่ตั้ง `ANTHROPIC_API_KEY` ระบบจะใช้ **mock recovery** แบบ rule-based และแสดงป้าย “MOCK (ไม่ใช่ AI จริง)”
 
 ## Vercel Deployment

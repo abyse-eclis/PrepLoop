@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label, Select } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { buildAssessmentPrompt } from "@/lib/prompts/generator";
 import type { AssessmentType } from "@/lib/schemas/common";
 
@@ -72,27 +73,30 @@ export function PromptGeneratorClient({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="flex flex-col gap-1">
             <Label className="text-xs">วิชา</Label>
-            <Select value={subject} onChange={(e) => setSubject(e.target.value)}>
-              {subjects.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              value={subject}
+              onValueChange={(v) => setSubject(v ?? "")}
+              options={subjects.map((s) => ({ value: s, label: s }))}
+              searchable={subjects.length > 8}
+              aria-label="วิชา"
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">ประเภท</Label>
-            <Select
+            <Combobox
               value={assessmentType}
-              onChange={(e) =>
-                setAssessmentType(e.target.value as AssessmentType)
+              onValueChange={(v) =>
+                setAssessmentType((v as AssessmentType) ?? "quiz")
               }
-            >
-              <option value="diagnostic">Diagnostic</option>
-              <option value="quiz">Quiz</option>
-              <option value="exercise">Exercise</option>
-              <option value="mock">Mock</option>
-            </Select>
+              options={[
+                { value: "diagnostic", label: "Diagnostic" },
+                { value: "quiz", label: "Quiz" },
+                { value: "exercise", label: "Exercise" },
+                { value: "mock", label: "Mock" },
+              ]}
+              searchable={false}
+              aria-label="ประเภทข้อสอบ"
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs">จำนวนข้อ</Label>

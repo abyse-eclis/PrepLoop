@@ -43,6 +43,8 @@ export const PLAN_ITEM_COLUMNS = [
   "target_minutes",
   "priority",
   "instructions",
+  "resource_url",
+  "resource_label",
   "review_reference_ids",
   "metadata",
   "created_at",
@@ -53,6 +55,10 @@ export const STUDY_SESSION_COLUMNS = [
   "workspace_id",
   "plan_item_id",
   "subject",
+  "source_activity_id",
+  "assessment_source_external_id",
+  "activity_type",
+  "course_code",
   "session_date",
   "start_time",
   "end_time",
@@ -61,6 +67,12 @@ export const STUDY_SESSION_COLUMNS = [
   "actual_lesson_from",
   "actual_lesson_to",
   "note",
+  "score",
+  "max_score",
+  "correct",
+  "incorrect",
+  "total_questions",
+  "import_dedup_key",
   "created_at",
   "updated_at",
 ].join(",");
@@ -89,20 +101,27 @@ export async function resolveVersionForDate(
     .from("study_plan_versions")
     .select(PLAN_VERSION_COLUMNS)
     .eq("workspace_id", workspaceId)
-    .in("status", ["active", "superseded"])
-    .lte("effective_from", date)
-    .order("effective_from", { ascending: false })
+    .in("status", ["active", "superseded", "draft"])
+    .lte("start_date", date)
+    .gte("end_date", date)
     .order("version_number", { ascending: false });
 
   const versions = (data as PlanVersion[] | null) ?? [];
-  for (const v of versions) {
-    const from = v.effective_from ?? v.start_date;
-    const to = v.effective_to;
-    if (from <= date && (to === null || to >= date)) {
-      return v;
-    }
-  }
-  return versions[0] ?? null;
+  const effective = versions
+    .filter((v) => v.status !== "draft")
+    .filter((v) => {
+      const from = v.effective_from ?? v.start_date;
+      const to = v.effective_to ?? v.end_date;
+      return from <= date && to >= date;
+    })
+    .sort((a, b) => {
+      const fromCmp = (b.effective_from ?? b.start_date).localeCompare(
+        a.effective_from ?? a.start_date
+      );
+      return fromCmp || b.version_number - a.version_number;
+    });
+
+  return effective[0] ?? versions.find((v) => v.status === "draft") ?? null;
 }
 
 export async function getActivePlanVersion(
@@ -175,6 +194,22 @@ export async function getPlanItemsForVersion(
   return (data as PlanItem[] | null) ?? [];
 }
 
+export async function getPlanItemByExternalId(
+  workspaceId: string,
+  planVersionId: string,
+  stableExternalId: string
+): Promise<PlanItem | null> {
+  const supabase = await createServerSupabase();
+  const { data } = await supabase
+    .from("study_plan_items")
+    .select(PLAN_ITEM_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("plan_version_id", planVersionId)
+    .eq("stable_external_id", stableExternalId)
+    .maybeSingle();
+  return (data as PlanItem | null) ?? null;
+}
+
 export async function resolvePlanItems(
   workspaceId: string,
   items: PlanItem[]
@@ -236,10 +271,27 @@ export async function getItemsForDate(
   workspaceId: string,
   date: string
 ): Promise<{ version: PlanVersion | null; items: ResolvedPlanItem[] }> {
-  const version = await resolveVersionForDate(workspaceId, date);
+  const supabase = await createServerSupabase();
+  const { data: snap } = await supabase
+    .from("daily_plan_snapshots")
+    .select("plan_version_id")
+    .eq("workspace_id", workspaceId)
+    .eq("snapshot_date", date)
+    .maybeSingle();
+  let version = snap?.plan_version_id
+    ? null
+    : await resolveVersionForDate(workspaceId, date);
+  if (snap?.plan_version_id) {
+    const { data: snapVersion } = await supabase
+      .from("study_plan_versions")
+      .select(PLAN_VERSION_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .eq("id", snap.plan_version_id)
+      .maybeSingle();
+    version = snapVersion as PlanVersion | null;
+  }
   if (!version) return { version: null, items: [] };
 
-  const supabase = await createServerSupabase();
   const { data: itemRows } = await supabase
     .from("study_plan_items")
     .select(PLAN_ITEM_COLUMNS)

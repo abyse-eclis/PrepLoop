@@ -3,16 +3,20 @@ import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { addDays, todayInTimezone } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { PLAN_VERSION_STATUS_LABELS } from "@/lib/plans/immutable";
 import { diffPlans, summarizeDiff } from "@/lib/plans/diff";
 import { PlanSchedule } from "@/features/plans/plan-schedule";
+import { getPlanItemResource } from "@/lib/plans/resource";
+import { activityLabel } from "@/lib/status";
+import { ExternalLink } from "lucide-react";
 import {
   ActivateButton,
   RecoveryPanel,
 } from "@/features/plans/plan-actions-client";
 import {
+  getPlanItemByExternalId,
   getPlanItemsForVersion,
   getPlanVersionSummaries,
 } from "@/features/plans/data";
@@ -37,6 +41,8 @@ function toDiffShape(items: PlanItem[]) {
       targetMinutes: i.target_minutes,
       priority: i.priority,
       instructions: i.instructions ?? "",
+      resourceUrl: i.resource_url ?? undefined,
+      resourceLabel: i.resource_label ?? undefined,
       reviewReferenceIds: i.review_reference_ids ?? [],
     });
     byDate.set(i.date, arr);
@@ -47,9 +53,10 @@ function toDiffShape(items: PlanItem[]) {
 export default async function PlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ v?: string; range?: string }>;
+  searchParams: Promise<{ v?: string; range?: string; item?: string }>;
 }) {
-  const { v, range: rawRange } = await searchParams;
+  const { v, range: rawRange, item: selectedItemExternalId } =
+    await searchParams;
   const range = parseRange(rawRange);
   const workspace = await getActiveWorkspace();
   if (!workspace) {
@@ -194,6 +201,7 @@ export default async function PlanPage({
                     workspaceId={workspace.id}
                     selected={selected}
                     bounds={bounds}
+                    selectedItemExternalId={selectedItemExternalId}
                   />
                 </Suspense>
               </>
@@ -211,21 +219,33 @@ async function PlanScheduleSection({
   workspaceId,
   selected,
   bounds,
+  selectedItemExternalId,
 }: {
   workspaceId: string;
   selected: PlanVersion;
   bounds: PlanRange;
+  selectedItemExternalId?: string;
 }) {
   const itemOptions =
     bounds.mode === "all"
       ? {}
       : { start: bounds.start, end: bounds.end };
-  const [items, parentItems] = await Promise.all([
+  const [items, parentItems, selectedItem] = await Promise.all([
     getPlanItemsForVersion(workspaceId, selected.id, itemOptions),
     selected.parent_version_id
       ? getPlanItemsForVersion(workspaceId, selected.parent_version_id, itemOptions)
       : Promise.resolve([]),
+    selectedItemExternalId
+      ? getPlanItemByExternalId(
+          workspaceId,
+          selected.id,
+          selectedItemExternalId
+        )
+      : Promise.resolve(null),
   ]);
+  const selectedItemResource = selectedItem
+    ? getPlanItemResource(selectedItem)
+    : null;
 
   const diff =
     selected.parent_version_id && parentItems.length > 0
@@ -250,6 +270,61 @@ async function PlanScheduleSection({
                 <li key={i}>• {d.description}</li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {selectedItem ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>รายละเอียดรายการเรียน</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            <div className="font-medium">{selectedItem.subject}</div>
+            <div className="text-muted-foreground">
+              {activityLabel(selectedItem.activity_type)}
+              {selectedItem.course_code ? ` · ${selectedItem.course_code}` : ""}
+              {selectedItem.lesson_from
+                ? ` · คลิป ${selectedItem.lesson_from}`
+                : ""}
+              {selectedItem.lesson_to &&
+              selectedItem.lesson_to !== selectedItem.lesson_from
+                ? `–${selectedItem.lesson_to}`
+                : ""}
+            </div>
+            {selectedItem.instructions ? (
+              <p className="text-muted-foreground">
+                {selectedItem.instructions}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-xs text-muted-foreground">แหล่งเรียน</span>
+              {selectedItemResource ? (
+                <>
+                  {selectedItemResource.sourceName ? (
+                    <span className="text-xs text-muted-foreground">
+                      {selectedItemResource.sourceName}
+                    </span>
+                  ) : null}
+                  <a
+                    href={selectedItemResource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${selectedItemResource.label}สำหรับ ${selectedItem.subject}${selectedItemResource.sourceName ? ` จาก ${selectedItemResource.sourceName}` : ""}`}
+                    title={selectedItemResource.tooltip}
+                    className={buttonVariants({
+                      variant: "outline",
+                      size: "sm",
+                    })}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                    {selectedItemResource.label}
+                  </a>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">-</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : null}

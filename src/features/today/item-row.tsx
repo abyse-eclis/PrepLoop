@@ -2,11 +2,20 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, Clock, History, MoreHorizontal, Pause, Play } from "lucide-react";
+import {
+  Check,
+  Clock,
+  ExternalLink,
+  History,
+  MoreHorizontal,
+  Pause,
+  Play,
+} from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
+import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
 import { Badge } from "@/components/ui/misc";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { setItemStatus } from "@/features/sessions/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
@@ -20,6 +29,7 @@ import {
   type ExecutionState,
 } from "@/lib/study-execution";
 import { formatDateKeyThai } from "@/lib/dates";
+import { getPlanItemResource } from "@/lib/plans/resource";
 
 const PRIORITY_LABEL: Record<string, string> = {
   high: "สูง",
@@ -49,6 +59,7 @@ export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
   }
 
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
+  const resource = getPlanItemResource(item);
   const executionState =
     row.executionState ??
     deriveExecutionState({
@@ -65,7 +76,7 @@ export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{item.subject}</span>
+              <span className="font-medium">{subjectLabel(item.subject)}</span>
               {item.course_code ? (
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
                   {item.course_code}
@@ -189,6 +200,32 @@ export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
                 </Button>
               </Link>
             ) : null}
+            {resource ? (
+              <span className="flex flex-wrap items-center gap-2">
+                {resource.sourceName ? (
+                  <span className="text-xs text-muted-foreground">
+                    {resource.sourceName}
+                  </span>
+                ) : null}
+                <a
+                  href={resource.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${resource.label}สำหรับ ${subjectLabel(item.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                  title={resource.tooltip}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  {resource.label}
+                </a>
+              </span>
+            ) : null}
+            <Link href={`/plan?item=${item.stable_external_id}`}>
+              <Button size="sm" variant="ghost">
+                ดูในหน้าแผน
+              </Button>
+            </Link>
             <Button
               size="sm"
               variant="outline"

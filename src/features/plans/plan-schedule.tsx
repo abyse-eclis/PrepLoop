@@ -2,9 +2,13 @@
 
 import { useMemo, useState } from "react";
 import type { PlanItem } from "@/types/db";
+import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
-import { Select } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { formatDateKeyThai } from "@/lib/dates";
+import { buttonVariants } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
+import { getPlanItemResource } from "@/lib/plans/resource";
 
 type Grouping = "day" | "week" | "month";
 
@@ -44,39 +48,45 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        <Select
-          value={grouping}
-          onChange={(e) => setGrouping(e.target.value as Grouping)}
-          className="w-auto"
-        >
-          <option value="day">รายวัน</option>
-          <option value="week">รายสัปดาห์</option>
-          <option value="month">รายเดือน</option>
-        </Select>
-        <Select
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="w-auto"
-        >
-          <option value="">ทุกวิชา</option>
-          {subjects.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={activity}
-          onChange={(e) => setActivity(e.target.value)}
-          className="w-auto"
-        >
-          <option value="">ทุกกิจกรรม</option>
-          {activities.map((a) => (
-            <option key={a} value={a}>
-              {activityLabel(a)}
-            </option>
-          ))}
-        </Select>
+        <div className="w-36">
+          <Combobox
+            value={grouping}
+            onValueChange={(v) => setGrouping((v as Grouping) ?? "day")}
+            options={[
+              { value: "day", label: "รายวัน" },
+              { value: "week", label: "รายสัปดาห์" },
+              { value: "month", label: "รายเดือน" },
+            ]}
+            searchable={false}
+            aria-label="การจัดกลุ่ม"
+          />
+        </div>
+        <div className="w-40">
+          <Combobox
+            value={subject || null}
+            onValueChange={(v) => setSubject(v ?? "")}
+            options={[
+              { value: "", label: "ทุกวิชา" },
+              ...subjects.map((s) => ({ value: s, label: subjectLabel(s) })),
+            ]}
+            placeholder="ทุกวิชา"
+            searchable={subjects.length > 8}
+            aria-label="กรองตามวิชา"
+          />
+        </div>
+        <div className="w-40">
+          <Combobox
+            value={activity || null}
+            onValueChange={(v) => setActivity(v ?? "")}
+            options={[
+              { value: "", label: "ทุกกิจกรรม" },
+              ...activities.map((a) => ({ value: a, label: activityLabel(a) })),
+            ]}
+            placeholder="ทุกกิจกรรม"
+            searchable={false}
+            aria-label="กรองตามกิจกรรม"
+          />
+        </div>
       </div>
 
       {groups.length === 0 ? (
@@ -95,7 +105,7 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                 </span>
               </div>
               <div className="scroll-x">
-                <table className="w-full min-w-[520px] text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
                       <th className="px-3 py-1.5 font-medium">วิชา</th>
@@ -103,28 +113,62 @@ export function PlanSchedule({ items }: { items: PlanItem[] }) {
                       <th className="px-3 py-1.5 font-medium">กิจกรรม</th>
                       <th className="px-3 py-1.5 font-medium">เป้าหมาย</th>
                       <th className="px-3 py-1.5 font-medium">ความสำคัญ</th>
+                      <th className="px-3 py-1.5 font-medium">แหล่งเรียน</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupItems.map((i) => (
-                      <tr key={i.id} className="border-t border-border/60">
-                        <td className="px-3 py-1.5">{i.subject}</td>
-                        <td className="px-3 py-1.5 text-muted-foreground">
-                          {i.course_code ?? "-"}
-                          {i.lesson_from ? ` · ${i.lesson_from}` : ""}
-                          {i.lesson_to && i.lesson_to !== i.lesson_from
-                            ? `–${i.lesson_to}`
-                            : ""}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {activityLabel(i.activity_type)}
-                        </td>
-                        <td className="px-3 py-1.5 tabular-nums">
-                          {i.target_minutes}น.
-                        </td>
-                        <td className="px-3 py-1.5">{i.priority}</td>
-                      </tr>
-                    ))}
+                    {groupItems.map((i) => {
+                      const resource = getPlanItemResource(i);
+                      return (
+                        <tr key={i.id} className="border-t border-border/60">
+                          <td className="px-3 py-1.5">{subjectLabel(i.subject)}</td>
+                          <td className="px-3 py-1.5 text-muted-foreground">
+                            {i.course_code ?? "-"}
+                            {i.lesson_from ? ` · ${i.lesson_from}` : ""}
+                            {i.lesson_to && i.lesson_to !== i.lesson_from
+                              ? `–${i.lesson_to}`
+                              : ""}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {activityLabel(i.activity_type)}
+                          </td>
+                          <td className="px-3 py-1.5 tabular-nums">
+                            {i.target_minutes}น.
+                          </td>
+                          <td className="px-3 py-1.5">{i.priority}</td>
+                          <td className="px-3 py-1.5">
+                            {resource ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {resource.sourceName ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {resource.sourceName}
+                                  </span>
+                                ) : null}
+                                <a
+                                  href={resource.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`${resource.label}สำหรับ ${subjectLabel(i.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
+                                  title={resource.tooltip}
+                                  className={buttonVariants({
+                                    variant: "outline",
+                                    size: "sm",
+                                  })}
+                                >
+                                <ExternalLink
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
+                                  {resource.label}
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -4,11 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { updateReview } from "./actions";
+import { subjectLabel } from "@/lib/subjects";
 import type { ReviewTask } from "@/types/db";
 
 export function ReviewItem({ review }: { review: ReviewTask }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [result, setResult] = useState(review.result ?? "");
   const [open, setOpen] = useState(false);
@@ -22,7 +25,13 @@ export function ReviewItem({ review }: { review: ReviewTask }) {
       });
       if (res.ok) {
         setOpen(false);
+        toast({
+          variant: "success",
+          title: status === "done" ? "บันทึกการทบทวนแล้ว" : "ข้ามการทบทวนแล้ว",
+        });
         router.refresh();
+      } else {
+        toast({ variant: "error", title: "บันทึกไม่สำเร็จ", description: res.error });
       }
     });
   }
@@ -32,7 +41,7 @@ export function ReviewItem({ review }: { review: ReviewTask }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">
-            {review.subject ?? "ทบทวน"}
+            {subjectLabel(review.subject)}
             {review.course_code ? ` · ${review.course_code}` : ""}
             {review.lesson_from
               ? ` · คลิป ${review.lesson_from}${

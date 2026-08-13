@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { getItemsForDate } from "@/features/plans/data";
-import { getStudySessionsForDate } from "@/features/sessions/data";
-import { todayInTimezone, isValidDateString, formatDateKeyThai } from "@/lib/dates";
+import {
+  todayInTimezone,
+  isValidDateString,
+  formatDateKeyThai,
+} from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
@@ -10,6 +13,10 @@ import { ItemRow } from "@/features/today/item-row";
 import { ResultForm } from "@/features/assessments/result-form";
 import { HistoryDatePicker } from "@/features/history/date-picker";
 import { SessionHistoryList } from "@/features/sessions/session-history";
+import {
+  getSessionsForDate,
+  groupSessionsByPlanItem,
+} from "@/features/history/data";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +45,32 @@ export default async function HistoryPage({
 
   const [{ version, items }, sessions] = await Promise.all([
     getItemsForDate(workspace.id, date),
-    getStudySessionsForDate(workspace.id, date),
+    getSessionsForDate(workspace.id, date),
   ]);
+  const planItems = items.map((row) => row.item);
+  const { sessionsByPlanItemId, matches, unplanned } = groupSessionsByPlanItem(
+    sessions,
+    planItems
+  );
+  const rowsWithHistory = items.map((row) => {
+    const matchedSessions = sessionsByPlanItemId.get(row.item.id) ?? row.sessions;
+    return {
+      ...row,
+      sessions: matchedSessions,
+      actualMinutes: matchedSessions.reduce(
+        (sum, session) => sum + (session.duration_minutes ?? 0),
+        0
+      ),
+    };
+  });
+  const sessionHistory = matches.map(({ session, planItem }) => ({
+    session,
+    item: planItem,
+  }));
+  const totalMinutes = sessions.reduce(
+    (sum, session) => sum + (session.duration_minutes ?? 0),
+    0
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -63,8 +94,12 @@ export default async function HistoryPage({
         <CardHeader>
           <CardTitle>Study Sessions ที่เกิดขึ้นจริง</CardTitle>
         </CardHeader>
-        <CardContent>
-          <SessionHistoryList sessions={sessions} />
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            {sessions.length} sessions · {totalMinutes} นาที ·{" "}
+            {unplanned.length} อิสระ
+          </p>
+          <SessionHistoryList sessions={sessionHistory} />
         </CardContent>
       </Card>
 
@@ -72,13 +107,19 @@ export default async function HistoryPage({
         <h2 className="text-sm font-semibold text-muted-foreground">
           รายการตามแผนของวันที่เลือก
         </h2>
-        {items.length === 0 ? (
+        {rowsWithHistory.length === 0 ? (
           <EmptyState
             title="ไม่มีรายการตามแผนในวันนี้"
-            description="ยังสามารถบันทึกผลสอบแบบอิสระด้านล่างได้"
+            description={
+              sessions.length > 0
+                ? "ยังมีประวัติที่ทำจริงด้านบน"
+                : "ยังสามารถบันทึกผลสอบแบบอิสระด้านล่างได้"
+            }
           />
         ) : (
-          items.map((row) => <ItemRow key={row.item.id} row={row} date={date} />)
+          rowsWithHistory.map((row) => (
+            <ItemRow key={row.item.id} row={row} date={date} />
+          ))
         )}
       </section>
 

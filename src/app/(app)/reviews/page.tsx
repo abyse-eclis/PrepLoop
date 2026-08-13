@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { todayInTimezone, addDays } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Stat } from "@/components/ui/misc";
 import { ReviewItem } from "@/features/reviews/review-item";
 import { getReviewPageData } from "@/features/reviews/data";
+import { ReviewAiPanel, type ReviewCandidate } from "@/features/reviews/ai-panel";
 import { RecoveryPanel } from "@/features/plans/plan-actions-client";
-import type { ReviewTask } from "@/types/db";
+import { subjectLabel } from "@/lib/subjects";
+import type { AssessmentAttempt, ReviewTask, StudySession } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,91 @@ export default async function ReviewsPage() {
 
   const today = todayInTimezone(workspace.timezone);
   const data = await getReviewPageData(workspace.id, today);
+  const supabase = await createServerSupabase();
+  const [{ data: sessionsData }, { data: attemptsData }, { data: errorsData }] =
+    await Promise.all([
+      supabase
+        .from("study_sessions")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .not("note", "is", null)
+        .order("session_date", { ascending: false })
+        .limit(30),
+      supabase
+        .from("assessment_attempts")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .order("attempt_date", { ascending: false })
+        .limit(30),
+      supabase
+        .from("error_logs")
+        .select("id, subject, topic, note, score, max_score, created_at, error_type")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
+  const sessions = (sessionsData as StudySession[] | null) ?? [];
+  const attempts = (attemptsData as AssessmentAttempt[] | null) ?? [];
+  const errors =
+    (errorsData as
+      | Array<{
+          id: string;
+          subject: string | null;
+          topic: string | null;
+          note: string | null;
+          score: number | null;
+          max_score: number | null;
+          created_at: string;
+          error_type: string;
+        }>
+      | null) ?? [];
+  const candidates: ReviewCandidate[] = [
+    ...sessions
+      .filter((session) => session.note)
+      .map((session) => ({
+        id: session.id,
+        topic:
+          session.lesson_title ??
+          session.actual_lesson_from ??
+          session.course_code ??
+          session.subject ??
+          "หัวข้อที่บันทึกไว้",
+        subject: subjectLabel(session.subject),
+        courseCode: session.course_code,
+        note: session.note,
+        source: "Study Session note",
+        lastDate: session.session_date,
+        sufficient: false,
+      })),
+    ...attempts
+      .filter(
+        (attempt) =>
+          attempt.percentage !== null &&
+          attempt.percentage < attempt.passing_percentage
+      )
+      .map((attempt) => ({
+        id: attempt.id,
+        topic: attempt.notes ?? attempt.subject ?? "แบบทดสอบ",
+        subject: subjectLabel(attempt.subject),
+        score: `${attempt.score}/${attempt.max_score}`,
+        source: "Assessment",
+        lastDate: attempt.attempt_date,
+        sufficient: true,
+      })),
+    ...errors.map((error) => ({
+      id: error.id,
+      topic: error.topic ?? error.error_type,
+      subject: subjectLabel(error.subject),
+      note: error.note,
+      score:
+        error.score !== null && error.max_score !== null
+          ? `${error.score}/${error.max_score}`
+          : null,
+      source: "Error log",
+      lastDate: error.created_at.slice(0, 10),
+      sufficient: true,
+    })),
+  ];
 
   const pending = data.pendingReviews;
   const buckets: Array<{ key: string; label: string; items: ReviewTask[] }> = [
@@ -122,6 +210,15 @@ export default async function ReviewsPage() {
             </Card>
           ))
       )}
+
+      {candidates.length > 0 ? (
+        <Card>
+          <CardHeader><CardTitle>หัวข้อที่ควรทบทวนจากข้อมูลจริง</CardTitle></CardHeader>
+          <CardContent className="grid gap-2">{candidates.slice(0, 12).map((c) => <div key={`${c.source}-${c.id}`} className="rounded-md border p-3"><div className="font-medium">{c.topic}</div><div className="text-sm text-muted-foreground">{c.subject}{c.courseCode ? ` · ${c.courseCode}` : ""} · {c.source} · ล่าสุด {c.lastDate}{c.score ? ` · คะแนน ${c.score}` : ""}</div>{c.note ? <p className="mt-1 text-sm">{c.note}</p> : null}</div>)}</CardContent>
+        </Card>
+      ) : null}
+
+      <ReviewAiPanel candidates={candidates} />
 
       {done.length > 0 ? (
         <Card>

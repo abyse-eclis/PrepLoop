@@ -51,6 +51,8 @@ export interface PlanItem {
   target_minutes: number;
   priority: "high" | "medium" | "low";
   instructions: string | null;
+  resource_url: string | null;
+  resource_label: string | null;
   review_reference_ids: string[] | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -79,6 +81,10 @@ export interface StudySession {
   workspace_id: string;
   plan_item_id: string | null;
   subject: string | null;
+  source_activity_id: string | null;
+  assessment_source_external_id: string | null;
+  activity_type: string | null;
+  course_code: string | null;
   session_date: string;
   start_time: string | null;
   end_time: string | null;
@@ -87,6 +93,20 @@ export interface StudySession {
   actual_lesson_from: string | null;
   actual_lesson_to: string | null;
   note: string | null;
+  score: number | null;
+  max_score: number | null;
+  correct: number | null;
+  incorrect: number | null;
+  total_questions: number | null;
+  lesson_code?: string | null;
+  lesson_title?: string | null;
+  lesson_url?: string | null;
+  source_type?: string | null;
+  result?: string | null;
+  completed?: boolean | null;
+  video_progress_start?: number | null;
+  video_progress_end?: number | null;
+  import_dedup_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -101,7 +121,7 @@ export interface AssessmentSource {
   course_code: string | null;
   lesson_from: string | null;
   lesson_to: string | null;
-  source_type: string;
+  source_type?: string;
   source_file_id: string | null;
   question_page_from: number | null;
   question_page_to: number | null;
@@ -141,7 +161,7 @@ export interface AssessmentAttempt {
 export interface ReviewTask {
   id: string;
   workspace_id: string;
-  source_type: string;
+  source_type?: string;
   source_ref: string | null;
   subject: string | null;
   course_code: string | null;
@@ -152,7 +172,7 @@ export interface ReviewTask {
   reason: string | null;
   instructions: string[] | null;
   status: "pending" | "done" | "skipped";
-  result: string | null;
+  result?: string | null;
   next_review_date: string | null;
 }
 
@@ -174,6 +194,8 @@ export interface CourseLesson {
   title: string;
   section: string | null;
   order_index: number | null;
+  lesson_url?: string | null;
+  source_type?: string | null;
 }
 
 export interface SourceFile {

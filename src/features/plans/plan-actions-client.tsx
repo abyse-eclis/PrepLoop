@@ -4,28 +4,42 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
 import { activatePlanVersion } from "./actions";
 import { requestRecovery, confirmRecovery } from "@/features/recovery/actions";
 import type { RecoveryPlan } from "@/lib/schemas/recovery";
 
 export function ActivateButton({ versionId }: { versionId: string }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="flex items-center gap-2">
       <Button
         size="sm"
         disabled={pending}
-        onClick={() =>
+        onClick={() => {
+          if (!confirming) {
+            setConfirming(true);
+            setMsg("กดอีกครั้งเพื่อยืนยัน แผนวันนี้ที่เริ่มดำเนินการแล้วจะไม่ถูกเปลี่ยน");
+            return;
+          }
           start(async () => {
             const res = await activatePlanVersion({ versionId });
             setMsg(res.ok ? res.message ?? "สำเร็จ" : res.error ?? "ผิดพลาด");
+            toast(
+              res.ok
+                ? { variant: "success", title: "เปิดใช้งานแผนแล้ว", description: res.message }
+                : { variant: "error", title: "เปิดใช้งานไม่สำเร็จ", description: res.error }
+            );
             if (res.ok) router.refresh();
+            setConfirming(false);
           })
-        }
+        }}
       >
-        {pending ? "กำลังเปิดใช้…" : "เปิดใช้เวอร์ชันนี้"}
+        {pending ? "กำลังเปิดใช้…" : confirming ? "ยืนยันใช้เวอร์ชันนี้" : "ใช้เวอร์ชันนี้"}
       </Button>
       {msg ? <span className="text-xs text-muted-foreground">{msg}</span> : null}
     </div>
@@ -42,6 +56,7 @@ export function RecoveryPanel({
   actionLabel?: string;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [preview, setPreview] = useState<{
     requestId: string;
@@ -79,9 +94,11 @@ export function RecoveryPanel({
       if (res.ok) {
         setConfirmMsg(res.message ?? "สร้าง Plan V ใหม่แล้ว");
         setPreview(null);
+        toast({ variant: "success", title: "สร้าง Recovery Plan แล้ว", description: res.message });
         router.refresh();
       } else {
         setError(res.error ?? "ยืนยันไม่สำเร็จ");
+        toast({ variant: "error", title: "ยืนยันไม่สำเร็จ", description: res.error });
       }
     });
   }

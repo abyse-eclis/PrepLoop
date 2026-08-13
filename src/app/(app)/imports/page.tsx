@@ -2,6 +2,7 @@ import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ImportPanel } from "@/features/imports/import-panel";
 import { Uploader } from "@/features/imports/uploader";
+import { FileList, type SourceFileRow } from "@/features/imports/file-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IMPORT_TYPE_LABELS, type ImportType } from "@/lib/schemas";
 import { formatDateTime } from "@/lib/dates";
@@ -17,7 +18,7 @@ export default async function ImportsPage() {
     summary: Record<string, number>;
     created_at: string;
   }> = [];
-  let files: Array<{ id: string; title: string; file_type: string }> = [];
+  let files: SourceFileRow[] = [];
 
   if (workspace) {
     const supabase = await createServerSupabase();
@@ -30,13 +31,40 @@ export default async function ImportsPage() {
         .limit(20),
       supabase
         .from("source_files")
-        .select("id, title, file_type")
+        .select(
+          "id, external_id, display_name, title, original_file_name, mime_type, file_type, size_bytes, storage_path, created_at"
+        )
         .eq("workspace_id", workspace.id)
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(100),
     ]);
     history = (h as typeof history) ?? [];
-    files = (f as typeof files) ?? [];
+    files = (
+      (f as Array<{
+        id: string;
+        external_id: string | null;
+        display_name: string | null;
+        title: string | null;
+        original_file_name: string | null;
+        mime_type: string | null;
+        file_type: string | null;
+        size_bytes: number | null;
+        storage_path: string | null;
+        created_at: string;
+      }> | null) ?? []
+    ).map((row) => ({
+      id: row.id,
+      displayName: row.display_name ?? row.title ?? row.original_file_name ?? "(ไม่มีชื่อ)",
+      originalFileName: row.original_file_name ?? row.title ?? "",
+      mimeType: row.mime_type ?? row.file_type ?? "application/octet-stream",
+      sizeBytes: row.size_bytes,
+      createdAt: row.created_at,
+      kind: row.storage_path
+        ? ("uploaded" as const)
+        : row.external_id
+          ? ("catalog" as const)
+          : ("reference" as const),
+    }));
   }
 
   return (
@@ -93,23 +121,7 @@ export default async function ImportsPage() {
               <CardTitle>ไฟล์แหล่งเรียน ({files.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {files.length === 0 ? (
-                <p className="text-sm text-muted-foreground">ยังไม่มีไฟล์</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {files.map((f) => (
-                    <li
-                      key={f.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="truncate">{f.title}</span>
-                      <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-                        {f.file_type.split("/")[1] ?? f.file_type}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <FileList files={files} timezone={workspace.timezone} />
             </CardContent>
           </Card>
         </div>

@@ -24,6 +24,28 @@
   --radius: 0.6rem;
 }
 
+/* Light palette — used when the app is rendered without the dark class so the
+   shared UI components (DatePicker / TimePicker / Combobox) work in both modes. */
+:root:not(.dark) {
+  --background: 0 0% 100%;
+  --foreground: 222 30% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 30% 12%;
+  --primary: 199 89% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 20% 94%;
+  --secondary-foreground: 222 30% 16%;
+  --muted: 210 20% 95%;
+  --muted-foreground: 215 15% 40%;
+  --accent: 210 20% 92%;
+  --accent-foreground: 222 30% 16%;
+  --destructive: 0 72% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 18% 86%;
+  --input: 214 18% 86%;
+  --ring: 199 89% 45%;
+}
+
 * {
   border-color: hsl(var(--border));
 }
@@ -35,8 +57,25 @@ html {
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  font-size: clamp(15px, 0.18vw + 14.5px, 16px);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+
+button, input, select, textarea {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+td, th {
+  font-size: 0.925rem;
+  line-height: 1.5;
+}
+
+.text-xs { font-size: 0.875rem; line-height: 1.45; }
+.text-sm { font-size: 0.95rem; line-height: 1.55; }
+.text-xl { font-size: clamp(1.5rem, 0.8vw + 1.2rem, 1.75rem); line-height: 1.3; }
+.text-lg { font-size: clamp(1.125rem, 0.4vw + 1rem, 1.25rem); line-height: 1.4; }
 
 /* Status color tokens (consistent across the app) */
 .status-not_started { background: hsl(215 15% 30% / 0.25); color: hsl(215 15% 72%); }
