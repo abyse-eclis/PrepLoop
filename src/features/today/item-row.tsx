@@ -29,6 +29,7 @@ import {
   type ExecutionState,
 } from "@/lib/study-execution";
 import { formatDateKeyThai } from "@/lib/dates";
+import { carryOverDayLabel } from "@/lib/carryover";
 import { getPlanItemResource } from "@/lib/plans/resource";
 
 const PRIORITY_LABEL: Record<string, string> = {
@@ -41,7 +42,21 @@ const ASSESSMENT_TYPES = new Set(["diagnostic", "quiz", "exercise", "mock"]);
 
 type ItemRowData = ResolvedPlanItem & { executionState?: ExecutionState };
 
-export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
+/** Carry-over context, present only when the row is shown on a later day. */
+export interface ItemRowCarryOver {
+  daysLate: number;
+  remainingMinutes: number;
+}
+
+export function ItemRow({
+  row,
+  date,
+  carryOver,
+}: {
+  row: ItemRowData;
+  date: string;
+  carryOver?: ItemRowCarryOver;
+}) {
   const { item } = row;
   const [openTime, setOpenTime] = useState(false);
   const [openMore, setOpenMore] = useState(false);
@@ -106,6 +121,12 @@ export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
                   })}`
                 : ""}
             </p>
+            {carryOver ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                ยกมาจากวันก่อน · {carryOverDayLabel(carryOver.daysLate)} ·
+                เวลาที่กรอกจะบันทึกเป็นวันนี้ (นับเป็นเรียนย้อนหลัง)
+              </p>
+            ) : null}
             {item.instructions ? (
               <p className="mt-1 text-sm text-muted-foreground">
                 {item.instructions}
@@ -113,11 +134,21 @@ export function ItemRow({ row, date }: { row: ItemRowData; date: string }) {
             ) : null}
           </div>
           <div className="text-right">
-            <Badge className={EXECUTION_STATE_CLASS[executionState]}>
-              {EXECUTION_STATE_LABELS[executionState]}
-            </Badge>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {carryOver ? (
+                <Badge className="status-incomplete">
+                  {carryOverDayLabel(carryOver.daysLate)}
+                </Badge>
+              ) : null}
+              <Badge className={EXECUTION_STATE_CLASS[executionState]}>
+                {EXECUTION_STATE_LABELS[executionState]}
+              </Badge>
+            </div>
             <div className="mt-1 text-xs text-muted-foreground tabular-nums">
               {row.actualMinutes}/{item.target_minutes} นาที
+              {carryOver && carryOver.remainingMinutes > 0
+                ? ` · ค้างอีก ${carryOver.remainingMinutes} นาที`
+                : ""}
             </div>
           </div>
         </div>

@@ -86,7 +86,9 @@ export function deriveExecutionState(input: {
   if (input.status === "paused") return "paused";
 
   if (complete) {
-    const actualDate = earliestActualDate(input.sessions) ?? input.plannedDate;
+    // With no logged session the completion happened on the day it was ticked
+    // off, so finishing yesterday's item today reads as "เรียนย้อนหลังแล้ว".
+    const actualDate = earliestActualDate(input.sessions) ?? input.today;
     if (actualDate < input.plannedDate) return "completed_early";
     if (actualDate > input.plannedDate) return "completed_late";
     return "completed_on_time";

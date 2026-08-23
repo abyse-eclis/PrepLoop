@@ -33,6 +33,18 @@ describe("study execution helpers", () => {
     ).toBe("completed_early");
   });
 
+  it("treats a past item ticked off today as completed_late", () => {
+    expect(
+      deriveExecutionState({
+        plannedDate: "2026-08-12",
+        today: "2026-08-13",
+        status: "completed",
+        targetMinutes: 60,
+        sessions: [],
+      })
+    ).toBe("completed_late");
+  });
+
   it("keeps an incomplete past plan item as overdue", () => {
     expect(
       deriveExecutionState({

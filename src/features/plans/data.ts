@@ -7,6 +7,7 @@ import type {
   StudySession,
 } from "@/types/db";
 import type { PlanItemStatus } from "@/lib/schemas/common";
+import { selectVersionForDate } from "@/lib/plans/version";
 
 export const PLAN_VERSION_COLUMNS = [
   "id",
@@ -106,22 +107,7 @@ export async function resolveVersionForDate(
     .gte("end_date", date)
     .order("version_number", { ascending: false });
 
-  const versions = (data as PlanVersion[] | null) ?? [];
-  const effective = versions
-    .filter((v) => v.status !== "draft")
-    .filter((v) => {
-      const from = v.effective_from ?? v.start_date;
-      const to = v.effective_to ?? v.end_date;
-      return from <= date && to >= date;
-    })
-    .sort((a, b) => {
-      const fromCmp = (b.effective_from ?? b.start_date).localeCompare(
-        a.effective_from ?? a.start_date
-      );
-      return fromCmp || b.version_number - a.version_number;
-    });
-
-  return effective[0] ?? versions.find((v) => v.status === "draft") ?? null;
+  return selectVersionForDate((data as PlanVersion[] | null) ?? [], date);
 }
 
 export async function getActivePlanVersion(
@@ -183,6 +169,38 @@ export async function getPlanItemsForVersion(
     .select(PLAN_ITEM_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("plan_version_id", planVersionId)
+    .order("date", { ascending: options.ascending ?? true })
+    .order("priority", { ascending: true });
+
+  if (options.start) query = query.gte("date", options.start);
+  if (options.end) query = query.lte("date", options.end);
+  if (options.limit) query = query.limit(options.limit);
+
+  const { data } = await query;
+  return (data as PlanItem[] | null) ?? [];
+}
+
+/**
+ * Load plan items in a date range across ALL versions of the workspace.
+ *
+ * Carry-over spans versions: work planned under v1 stays owed even after a
+ * recovery plan (v2) takes over from today. Callers filter each item against
+ * the version that owns its date (see `versionIdsByDate`).
+ */
+export async function getPlanItemsInRange(
+  workspaceId: string,
+  options: {
+    start?: string;
+    end?: string;
+    limit?: number;
+    ascending?: boolean;
+  } = {}
+): Promise<PlanItem[]> {
+  const supabase = await createServerSupabase();
+  let query = supabase
+    .from("study_plan_items")
+    .select(PLAN_ITEM_COLUMNS)
+    .eq("workspace_id", workspaceId)
     .order("date", { ascending: options.ascending ?? true })
     .order("priority", { ascending: true });
 

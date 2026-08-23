@@ -14,6 +14,9 @@ PrepLoop รับข้อมูลและแผนที่ถูกสร�
 - 📥 Import JSON 3 ประเภท (Workspace Config / Learning Source Catalog / Full Study Plan) พร้อม validate ด้วย Zod และ preview
 - 📄 อัปโหลดไฟล์แหล่งเรียนแบบ private (PDF/PNG/JPEG/JSON) เปิดผ่าน signed URL
 - 🗓️ หน้า **Today** ใช้ง่ายที่สุด: กรอกเวลาหลายช่วง (เช่น `09:13–12:00` = 167 นาที), เริ่ม/พัก/เรียนต่อ/เรียนเสร็จ
+- ⏭️ **งานค้าง / เรียนย้อนหลัง (carry-over)** — รายการของวันก่อนที่ยังเรียนไม่ครบถูกยกมาแสดงในหน้า Today
+  จัดกลุ่มตามวันที่ตามแผน บอกว่าค้างมากี่วันและค้างอีกกี่นาที · `planned date` ไม่ถูกแก้ เวลาที่กรอกลงเป็นวันนี้
+  (สถานะกลายเป็น “เรียนย้อนหลังแล้ว”) · ข้ามเวอร์ชันแผนได้ — งานค้างจาก v1 ยังโผล่หลังเปิดใช้ Recovery v2
 - 🧮 คำนวณ Time / Task / Weighted completion, คะแนน pass/fail, accuracy, trend
 - ♻️ **Immutable Plan Versions** — เปลี่ยนแผนต้องสร้างเวอร์ชันใหม่ พร้อม parent, effective range และ text diff
 - 🤖 **Claude Haiku Recovery** พร้อม **mock fallback** เมื่อไม่มี API key (แจ้งชัดเจนว่าเป็น mock)
@@ -130,6 +133,7 @@ SELECT/INSERT/DELETE — ไม่มี update flow ในระดับ appli
 - ไม่มี AI chatbot และไม่สร้างโจทย์ผ่าน API (ใช้ Prompt Generator ให้ไป copy เอง)
 - ไม่เรียก Claude ทุกครั้งที่เปิดหน้า — เรียกเฉพาะตอนขอ Recovery
 - Timer เป็นแบบ Start/Pause/Resume/Complete + กรอกเวลาเอง ไม่มี real-time timer ละเอียด
+- งานค้างมองย้อนหลังสูงสุด 30 วัน และแสดงไม่เกิน 60 รายการ (ที่เก่ากว่านั้นดูได้ที่หน้า `/history`)
 - Diff ของแผนเป็น text list ไม่ใช่ visual diff
 - Progress ใช้ card + progress bar ไม่มี chart library
 - Config แก้ผ่านการ import เวอร์ชันใหม่เท่านั้น ไม่มี form แก้ทีละช่อง

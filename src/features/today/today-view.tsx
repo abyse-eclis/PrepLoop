@@ -3,7 +3,12 @@ import type { Workspace, ReviewTask } from "@/types/db";
 import type { QueuePlanItem, TodayStudyQueue } from "@/features/today/data";
 import { timeCompletion } from "@/lib/calculations";
 import { formatDateKeyThai } from "@/lib/dates";
-import { Stat, EmptyState, Progress } from "@/components/ui/misc";
+import {
+  carryOverDayLabel,
+  type CarryOverGroup,
+  type CarryOverSummary,
+} from "@/lib/carryover";
+import { Stat, EmptyState, Progress, Badge } from "@/components/ui/misc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "./item-row";
@@ -23,8 +28,9 @@ export function TodayView({
     summary.actualMinutesToday,
     summary.plannedTargetMinutes
   );
+  const carryOver = queue.carryOver;
   const hasQueue =
-    queue.overdue.length > 0 ||
+    carryOver.itemCount > 0 ||
     queue.today.length > 0 ||
     queue.supplementary.length > 0 ||
     queue.next.length > 0;
@@ -54,7 +60,11 @@ export function TodayView({
         <Stat
           label="เวลาเป้าหมาย"
           value={`${summary.plannedTargetMinutes} นาที`}
-          hint="เป้าหมาย ไม่ใช่ hard limit"
+          hint={
+            summary.carryOverRemainingMinutes > 0
+              ? `รวมงานค้างเป็น ${summary.totalWorkloadMinutes} นาที`
+              : "เป้าหมาย ไม่ใช่ hard limit"
+          }
         />
         <Stat
           label="เวลาจริงวันนี้"
@@ -70,7 +80,20 @@ export function TodayView({
           value={`${summary.todayCompletedItems}/${summary.todayTotalItems}`}
           hint="นับตาม planned date วันนี้"
         />
-        <Stat label="งานค้าง" value={queue.overdue.length} />
+        <Stat
+          label="งานค้าง (เรียนย้อนหลัง)"
+          value={carryOver.itemCount}
+          hint={
+            carryOver.itemCount > 0
+              ? `${carryOverDayLabel(carryOver.maxDaysLate)} · ค้างอีก ${summary.carryOverRemainingMinutes} นาที`
+              : "ตามแผนครบทุกวัน"
+          }
+        />
+        <Stat
+          label="เรียนย้อนหลังวันนี้"
+          value={`${summary.carryOverMinutesToday} นาที`}
+          hint="เวลาที่ลงวันนี้ให้งานของวันก่อน"
+        />
         <Stat
           label="ทบทวนถึงกำหนด"
           value={queue.supplementary.length}
@@ -107,6 +130,15 @@ export function TodayView({
                 ? ` · เหลืออีกประมาณ ${summary.remainingTargetMinutes} นาที`
                 : ""}
           </p>
+          {summary.carryOverRemainingMinutes > 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              + งานค้างจากวันก่อนอีก {summary.carryOverRemainingMinutes} นาที ·
+              รวมภาระวันนี้ {summary.totalWorkloadMinutes} นาที
+              {summary.carryOverMinutesToday > 0
+                ? ` · เรียนย้อนหลังไปแล้ว ${summary.carryOverMinutesToday} นาที`
+                : ""}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -126,12 +158,7 @@ export function TodayView({
         />
       ) : (
         <div className="flex flex-col gap-5">
-          <QueueSection
-            title="งานค้าง"
-            description="planned date ยังเป็นวันเดิม แต่เรียนจริงวันนี้ได้"
-            items={queue.overdue}
-            date={date}
-          />
+          <CarryOverSection carryOver={carryOver} date={date} />
           <QueueSection
             title="วันนี้"
             description="รายการที่ planned date ตรงกับวันนี้"
@@ -147,6 +174,78 @@ export function TodayView({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Unfinished work from earlier days, grouped by the day it was planned for.
+ * planned date is never rewritten — studying it now is recorded on today's
+ * date, which the item then reports as "เรียนย้อนหลังแล้ว".
+ */
+function CarryOverSection({
+  carryOver,
+  date,
+}: {
+  carryOver: CarryOverSummary<QueuePlanItem>;
+  date: string;
+}) {
+  if (carryOver.itemCount === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          เรียนย้อนหลัง · งานค้าง ({carryOver.itemCount})
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          ของวันก่อนที่ยังไม่ครบ ยกมาแสดงวันนี้ · ค้างรวม{" "}
+          {carryOver.remainingMinutes} นาที · planned date ยังเป็นวันเดิม
+          เวลาที่กรอกจะถูกบันทึกเป็นวันนี้
+        </p>
+      </div>
+      <div className="flex flex-col gap-4">
+        {carryOver.groups.map((group) => (
+          <CarryOverDay key={group.date} group={group} date={date} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CarryOverDay({
+  group,
+  date,
+}: {
+  group: CarryOverGroup<QueuePlanItem>;
+  date: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">
+          {formatDateKeyThai(group.date, { buddhist: true })}
+        </span>
+        <Badge className="status-incomplete">
+          {carryOverDayLabel(group.daysLate)}
+        </Badge>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {group.entries.length} รายการ · ค้างอีก {group.remainingMinutes} นาที
+        </span>
+      </div>
+      <div className="flex flex-col gap-3">
+        {group.entries.map((entry) => (
+          <ItemRow
+            key={entry.row.item.id}
+            row={entry.row}
+            date={date}
+            carryOver={{
+              daysLate: entry.daysLate,
+              remainingMinutes: entry.remainingMinutes,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
