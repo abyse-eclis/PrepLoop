@@ -112,5 +112,23 @@ describe("daySummary", () => {
     expect(r.taskCompletionPercent).toBe(50);
     // weighted: high done(3)/ (3+2)=5 => 60
     expect(r.weightedCompletionPercent).toBe(60);
+    expect(r.excludedItems).toBe(0);
+  });
+
+  it("drops skipped and cancelled items from target and denominator", () => {
+    const r = daySummary({
+      items: [
+        { priority: "high", targetMinutes: 120, status: "completed" },
+        { priority: "medium", targetMinutes: 60, status: "skipped" },
+        { priority: "low", targetMinutes: 30, status: "cancelled" },
+      ],
+      actualMinutesByItem: [120],
+    });
+    expect(r.targetMinutes).toBe(120);
+    expect(r.totalItems).toBe(1);
+    expect(r.pendingItems).toBe(0);
+    expect(r.excludedItems).toBe(2);
+    expect(r.taskCompletionPercent).toBe(100);
+    expect(r.weightedCompletionPercent).toBe(100);
   });
 });

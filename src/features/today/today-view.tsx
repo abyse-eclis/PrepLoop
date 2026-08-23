@@ -12,6 +12,7 @@ import { Stat, EmptyState, Progress, Badge } from "@/components/ui/misc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "./item-row";
+import { SkipDayButton } from "./skip-day-button";
 import { ReviewItem } from "@/features/reviews/review-item";
 
 export function TodayView({
@@ -31,6 +32,7 @@ export function TodayView({
   const carryOver = queue.carryOver;
   const hasQueue =
     carryOver.itemCount > 0 ||
+    queue.carryOverSkipped.length > 0 ||
     queue.today.length > 0 ||
     queue.supplementary.length > 0 ||
     queue.next.length > 0;
@@ -86,7 +88,9 @@ export function TodayView({
           hint={
             carryOver.itemCount > 0
               ? `${carryOverDayLabel(carryOver.maxDaysLate)} · ค้างอีก ${summary.carryOverRemainingMinutes} นาที`
-              : "ตามแผนครบทุกวัน"
+              : summary.carryOverSkippedItems > 0
+                ? `ไม่มีค้าง · ข้ามไว้ ${summary.carryOverSkippedItems} รายการ`
+                : "ตามแผนครบทุกวัน"
           }
         />
         <Stat
@@ -158,7 +162,11 @@ export function TodayView({
         />
       ) : (
         <div className="flex flex-col gap-5">
-          <CarryOverSection carryOver={carryOver} date={date} />
+          <CarryOverSection
+            carryOver={carryOver}
+            skipped={queue.carryOverSkipped}
+            date={date}
+          />
           <QueueSection
             title="วันนี้"
             description="รายการที่ planned date ตรงกับวันนี้"
@@ -185,12 +193,14 @@ export function TodayView({
  */
 function CarryOverSection({
   carryOver,
+  skipped,
   date,
 }: {
   carryOver: CarryOverSummary<QueuePlanItem>;
+  skipped: QueuePlanItem[];
   date: string;
 }) {
-  if (carryOver.itemCount === 0) return null;
+  if (carryOver.itemCount === 0 && skipped.length === 0) return null;
 
   return (
     <section>
@@ -201,7 +211,8 @@ function CarryOverSection({
         <p className="text-xs text-muted-foreground">
           ของวันก่อนที่ยังไม่ครบ ยกมาแสดงวันนี้ · ค้างรวม{" "}
           {carryOver.remainingMinutes} นาที · planned date ยังเป็นวันเดิม
-          เวลาที่กรอกจะถูกบันทึกเป็นวันนี้
+          เวลาที่กรอกจะถูกบันทึกเป็นวันนี้ · ถ้าตารางเปลี่ยนจนไม่ต้องเรียนแล้ว
+          กด “ข้าม” ได้ (ไม่นับเป็นงานค้างและไม่ตัดคะแนน)
         </p>
       </div>
       <div className="flex flex-col gap-4">
@@ -209,7 +220,26 @@ function CarryOverSection({
           <CarryOverDay key={group.date} group={group} date={date} />
         ))}
       </div>
+      <SkippedList items={skipped} date={date} />
     </section>
+  );
+}
+
+/** Skipped items, collapsed — the only place on Today to undo a skip. */
+function SkippedList({ items, date }: { items: QueuePlanItem[]; date: string }) {
+  if (items.length === 0) return null;
+
+  return (
+    <details className="mt-4 rounded-lg border border-border bg-card p-3">
+      <summary className="cursor-pointer text-sm text-muted-foreground">
+        รายการที่ข้ามไว้ ({items.length}) · กดเพื่อดูและเลิกข้าม
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">
+        {items.map((row) => (
+          <ItemRow key={row.item.id} row={row} date={date} />
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -232,6 +262,9 @@ function CarryOverDay({
         <span className="text-xs tabular-nums text-muted-foreground">
           {group.entries.length} รายการ · ค้างอีก {group.remainingMinutes} นาที
         </span>
+        <SkipDayButton
+          planItemIds={group.entries.map((entry) => entry.row.item.id)}
+        />
       </div>
       <div className="flex flex-col gap-3">
         {group.entries.map((entry) => (

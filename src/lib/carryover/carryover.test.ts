@@ -30,6 +30,10 @@ describe("carry-over", () => {
     expect(isCarriedOver("in_progress", "2026-08-12", "2026-08-13")).toBe(true);
   });
 
+  it("does not carry an item the user skipped", () => {
+    expect(isCarriedOver("skipped", "2026-08-12", "2026-08-13")).toBe(false);
+  });
+
   it("does not carry finished or cancelled items", () => {
     expect(isCarriedOver("completed_on_time", "2026-08-12", "2026-08-13")).toBe(
       false
@@ -57,6 +61,7 @@ describe("carry-over", () => {
         candidate({ plannedDate: "2026-08-10", targetMinutes: 90 }),
         candidate({ plannedDate: "2026-08-12", targetMinutes: 30 }),
         candidate({ plannedDate: "2026-08-11", executionState: "completed_late" }),
+        candidate({ plannedDate: "2026-08-09", executionState: "skipped" }),
       ],
       "2026-08-13",
       read

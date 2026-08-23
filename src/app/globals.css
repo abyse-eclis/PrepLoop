@@ -85,6 +85,7 @@ td, th {
 .status-incomplete  { background: hsl(0 72% 55% / 0.18);   color: hsl(0 80% 72%); }
 .status-needs_review{ background: hsl(280 60% 60% / 0.18); color: hsl(280 70% 76%); }
 .status-recovery    { background: hsl(24 90% 55% / 0.18);  color: hsl(24 90% 68%); }
+.status-skipped     { background: hsl(215 12% 45% / 0.22); color: hsl(215 14% 70%); }
 .status-cancelled   { background: hsl(215 12% 40% / 0.18); color: hsl(215 12% 60%); text-decoration: line-through; }
 
 .scroll-x { overflow-x: auto; }

@@ -198,9 +198,72 @@ export async function setItemStatus(
   );
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/plan");
+  revalidateStudyData();
   return { ok: true };
+}
+
+const setItemsStatusSchema = z.object({
+  planItemIds: z.array(z.string().uuid()).min(1).max(200),
+  status: planItemStatusEnum,
+});
+
+/**
+ * Set one status on many plan items at once — used by "ข้ามทั้งวัน" when a
+ * schedule change makes a whole day of carried-over work irrelevant.
+ * All ids must belong to the caller's workspace or nothing is written.
+ */
+export async function setItemsStatus(
+  input: z.infer<typeof setItemsStatusSchema>
+): Promise<ActionResult> {
+  const parsed = setItemsStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "ข้อมูลไม่ถูกต้อง" };
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace" };
+
+  const ids = Array.from(new Set(parsed.data.planItemIds));
+  const supabase = await createServerSupabase();
+  const { data: itemRows, error: itemError } = await supabase
+    .from("study_plan_items")
+    .select("id, workspace_id, date, lesson_from, lesson_to")
+    .in("id", ids)
+    .eq("workspace_id", workspace.id);
+  if (itemError) return { ok: false, error: itemError.message };
+
+  const items =
+    (itemRows as Array<{
+      id: string;
+      workspace_id: string;
+      date: string;
+      lesson_from: string | null;
+      lesson_to: string | null;
+    }> | null) ?? [];
+  if (items.length !== ids.length) {
+    return { ok: false, error: "ไม่พบบางรายการหรือไม่มีสิทธิ์เข้าถึง" };
+  }
+
+  // One snapshot per distinct planned date is enough — the helper is a no-op
+  // once that date already has one.
+  const seenDates = new Set<string>();
+  for (const item of items) {
+    if (seenDates.has(item.date)) continue;
+    seenDates.add(item.date);
+    await ensureDailySnapshot(workspace.id, item.id, "status_change");
+  }
+
+  const { error } = await supabase.from("item_status_overrides").upsert(
+    items.map((item) => ({
+      workspace_id: workspace.id,
+      plan_item_id: item.id,
+      status: parsed.data.status,
+      actual_lesson_from: null,
+      actual_lesson_to: null,
+    })),
+    { onConflict: "plan_item_id" }
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidateStudyData();
+  return { ok: true, message: `อัปเดต ${items.length} รายการแล้ว` };
 }
 
 const deleteSessionSchema = z.object({ sessionId: z.string().uuid() });

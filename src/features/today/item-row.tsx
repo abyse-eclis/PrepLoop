@@ -10,6 +10,8 @@ import {
   MoreHorizontal,
   Pause,
   Play,
+  SkipForward,
+  Undo2,
 } from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
 import { subjectLabel } from "@/lib/subjects";
@@ -75,6 +77,29 @@ export function ItemRow({
 
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
   const resource = getPlanItemResource(item);
+  const isSkipped = row.status === "skipped";
+  // Skipping is the escape hatch for a shifted schedule: the item leaves the
+  // backlog and the stats denominator, and "เลิกข้าม" puts it straight back.
+  const skipButton = (
+    <Button
+      size="sm"
+      variant={isSkipped ? "secondary" : "outline"}
+      disabled={pending}
+      onClick={() => changeStatus(isSkipped ? "not_started" : "skipped")}
+      title={
+        isSkipped
+          ? "เอากลับมาเรียนตามเดิม"
+          : "ข้ามรายการนี้ ไม่ต้องเรียนแล้ว (ไม่นับเป็นงานค้างและไม่ตัดคะแนน)"
+      }
+    >
+      {isSkipped ? (
+        <Undo2 className="h-3.5 w-3.5" />
+      ) : (
+        <SkipForward className="h-3.5 w-3.5" />
+      )}
+      {isSkipped ? "เลิกข้าม" : "ข้าม / ไม่เรียนแล้ว"}
+    </Button>
+  );
   const executionState =
     row.executionState ??
     deriveExecutionState({
@@ -211,6 +236,7 @@ export function ItemRow({
             <Clock className="h-3.5 w-3.5" />
             เพิ่มเวลา
           </Button>
+          {carryOver || isSkipped ? skipButton : null}
           <Button
             size="sm"
             variant="ghost"
@@ -224,6 +250,7 @@ export function ItemRow({
 
         {openMore ? (
           <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+            {carryOver || isSkipped ? null : skipButton}
             {isAssessment ? (
               <Link href={`/assessments?item=${item.id}`}>
                 <Button size="sm" variant="outline">

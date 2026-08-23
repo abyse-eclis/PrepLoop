@@ -33,6 +33,18 @@ describe("study execution helpers", () => {
     ).toBe("completed_early");
   });
 
+  it("reports a skipped item as skipped even with logged minutes", () => {
+    expect(
+      deriveExecutionState({
+        plannedDate: "2026-08-12",
+        today: "2026-08-13",
+        status: "skipped",
+        targetMinutes: 60,
+        sessions: [{ ...baseSession, session_date: "2026-08-12" }],
+      })
+    ).toBe("skipped");
+  });
+
   it("treats a past item ticked off today as completed_late", () => {
     expect(
       deriveExecutionState({

@@ -115,6 +115,9 @@ async function DailyView({
           <p className="text-xs text-muted-foreground">
             แผน: {p.planVersionName ?? "—"} · งานค้าง {p.pendingItems} · ผลสอบวันนี้{" "}
             {p.attemptCount}
+            {p.excludedItems > 0
+              ? ` · ข้าม/ยกเลิก ${p.excludedItems} (ไม่นับในเป้าและ %)`
+              : ""}
           </p>
         </CardContent>
       </Card>

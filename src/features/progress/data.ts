@@ -15,6 +15,8 @@ export interface DailyProgress {
   completedItems: number;
   totalItems: number;
   pendingItems: number;
+  /** Items left out of the day because they were skipped or cancelled. */
+  excludedItems: number;
   reviewDue: number;
   attemptCount: number;
   planVersionName: string | null;
@@ -73,6 +75,7 @@ export async function getDailyProgress(
     completedItems: summary.completedItems,
     totalItems: summary.totalItems,
     pendingItems: summary.pendingItems,
+    excludedItems: summary.excludedItems,
     reviewDue: reviewDue ?? 0,
     attemptCount: attemptCount ?? 0,
     planVersionName: version?.name ?? null,

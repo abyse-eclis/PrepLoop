@@ -175,6 +175,12 @@ export interface DaySummaryInput {
   }>;
   actualMinutesByItem: number[];
   completedStatuses?: string[];
+  /**
+   * Statuses dropped from the day entirely — no target minutes, and out of the
+   * completion denominator. Work the user skipped or a newer plan cancelled is
+   * not owed, so it must not read as failure.
+   */
+  excludedStatuses?: string[];
 }
 
 export interface DaySummary {
@@ -186,18 +192,22 @@ export interface DaySummary {
   totalItems: number;
   completedItems: number;
   pendingItems: number;
+  /** Items left out of the day (skipped or cancelled). */
+  excludedItems: number;
 }
 
 const DEFAULT_COMPLETED = ["completed"];
+const DEFAULT_EXCLUDED = ["skipped", "cancelled"];
 
 export function daySummary(input: DaySummaryInput): DaySummary {
   const completedSet = new Set(input.completedStatuses ?? DEFAULT_COMPLETED);
-  const targetMinutes = input.items.reduce((s, i) => s + i.targetMinutes, 0);
+  const excludedSet = new Set(input.excludedStatuses ?? DEFAULT_EXCLUDED);
+  const counted = input.items.filter((i) => !excludedSet.has(i.status));
+
+  const targetMinutes = counted.reduce((s, i) => s + i.targetMinutes, 0);
   const actualMinutes = input.actualMinutesByItem.reduce((s, m) => s + m, 0);
-  const completedItems = input.items.filter((i) =>
-    completedSet.has(i.status)
-  ).length;
-  const totalItems = input.items.length;
+  const completedItems = counted.filter((i) => completedSet.has(i.status)).length;
+  const totalItems = counted.length;
 
   return {
     targetMinutes,
@@ -205,7 +215,7 @@ export function daySummary(input: DaySummaryInput): DaySummary {
     time: timeCompletion(actualMinutes, targetMinutes),
     taskCompletionPercent: taskCompletion(completedItems, totalItems),
     weightedCompletionPercent: weightedCompletion(
-      input.items.map((i) => ({
+      counted.map((i) => ({
         priority: i.priority,
         completed: completedSet.has(i.status),
       }))
@@ -213,5 +223,6 @@ export function daySummary(input: DaySummaryInput): DaySummary {
     totalItems,
     completedItems,
     pendingItems: totalItems - completedItems,
+    excludedItems: input.items.length - counted.length,
   };
 }

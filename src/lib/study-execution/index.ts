@@ -11,6 +11,7 @@ export type ExecutionState =
   | "paused"
   | "needs_review"
   | "recovery"
+  | "skipped"
   | "cancelled";
 
 export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
@@ -23,6 +24,7 @@ export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
   paused: "พัก",
   needs_review: "ต้องทบทวน",
   recovery: "Recovery",
+  skipped: "ข้ามแล้ว",
   cancelled: "ยกเลิกตามแผนใหม่",
 };
 
@@ -36,6 +38,7 @@ export const EXECUTION_STATE_CLASS: Record<ExecutionState, string> = {
   paused: "status-paused",
   needs_review: "status-needs_review",
   recovery: "status-recovery",
+  skipped: "status-skipped",
   cancelled: "status-cancelled",
 };
 
@@ -81,6 +84,7 @@ export function deriveExecutionState(input: {
     (input.targetMinutes > 0 && actualMinutes >= input.targetMinutes);
 
   if (input.status === "cancelled") return "cancelled";
+  if (input.status === "skipped") return "skipped";
   if (input.status === "recovery") return "recovery";
   if (input.status === "needs_review") return "needs_review";
   if (input.status === "paused") return "paused";

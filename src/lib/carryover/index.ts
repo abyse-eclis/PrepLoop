@@ -12,11 +12,16 @@ import type { ExecutionState } from "@/lib/study-execution";
 /** How far back the Today page looks for unfinished work. */
 export const CARRY_OVER_LOOKBACK_DAYS = 30;
 
-/** Execution states that are never carried over. */
+/**
+ * Execution states that are never carried over: finished, skipped by the user,
+ * or cancelled by a newer plan. Skipping is how a shifted schedule clears a
+ * backlog it will never catch up on.
+ */
 const SETTLED_STATES = new Set<ExecutionState>([
   "completed_on_time",
   "completed_early",
   "completed_late",
+  "skipped",
   "cancelled",
 ]);
 

@@ -36,6 +36,11 @@ export interface TodayStudyQueue {
   version: PlanVersion | null;
   /** Unfinished work from earlier days, grouped by the day it came from. */
   carryOver: CarryOverSummary<QueuePlanItem>;
+  /**
+   * Past items the user skipped. They are out of the backlog, but stay on the
+   * page so "ข้าม" can be undone without hunting through /history.
+   */
+  carryOverSkipped: QueuePlanItem[];
   today: QueuePlanItem[];
   supplementary: ReviewTask[];
   next: QueuePlanItem[];
@@ -53,6 +58,8 @@ export interface TodayStudyQueue {
     carryOverMinutesToday: number;
     /** Today's own target plus the carry-over debt. */
     totalWorkloadMinutes: number;
+    /** Past items dropped from the backlog because they were skipped. */
+    carryOverSkippedItems: number;
   };
 }
 
@@ -179,6 +186,9 @@ export async function getStudyQueue(
     actualMinutes: row.actualMinutes,
     executionState: row.executionState,
   }));
+  const carryOverSkipped = pastQueue
+    .filter((row) => row.executionState === "skipped")
+    .sort((a, b) => b.item.date.localeCompare(a.item.date));
   const carryOverMinutesToday = carryOver.entries.reduce(
     (sum, entry) => sum + minutesOnDate(entry.row.sessions, date),
     0
@@ -195,6 +205,7 @@ export async function getStudyQueue(
   return {
     version,
     carryOver,
+    carryOverSkipped,
     today: todayQueue,
     supplementary: (reviews.data as ReviewTask[] | null) ?? [],
     next: nextQueue,
@@ -213,6 +224,7 @@ export async function getStudyQueue(
       carryOverRemainingMinutes: carryOver.remainingMinutes,
       carryOverMinutesToday,
       totalWorkloadMinutes: plannedTargetMinutes + carryOver.remainingMinutes,
+      carryOverSkippedItems: carryOverSkipped.length,
     },
   };
 }
