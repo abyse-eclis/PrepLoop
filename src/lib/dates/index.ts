@@ -249,6 +249,36 @@ export function isoWeekKey(dateKey: string): string {
   return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
+/** Monday..Sunday bounds of the ISO week containing a date key. */
+export function weekBounds(dateKey: string): { start: string; end: string } {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  const day = date.getUTCDay() || 7; // 1..7, Monday=1
+  const monday = addDays(dateKey, -(day - 1));
+  return { start: monday, end: addDays(monday, 6) };
+}
+
+/** First..last day bounds of the calendar month containing a date key. */
+export function monthBounds(dateKey: string): { start: string; end: string } {
+  const [y, m] = dateKey.split("-").map(Number);
+  const start = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const end = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(
+    lastDay
+  ).padStart(2, "0")}`;
+  return { start, end };
+}
+
+/** Every date key from start to end, inclusive. */
+export function dateRange(start: string, end: string): string[] {
+  if (!isValidDateString(start) || !isValidDateString(end)) {
+    throw new Error(`ช่วงวันที่ไม่ถูกต้อง: ${start} → ${end}`);
+  }
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
 /** Return the month key (YYYY-MM) for a date key. */
 export function monthKey(dateKey: string): string {
   return dateKey.slice(0, 7);

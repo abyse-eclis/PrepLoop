@@ -11,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Stat, EmptyState, Progress } from "@/components/ui/misc";
+import { ExportPanel } from "@/features/export/export-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,8 @@ export default async function ProgressPage({
           monthly
         />
       ) : null}
+
+      <ExportPanel today={today} />
     </div>
   );
 }
