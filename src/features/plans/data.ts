@@ -103,7 +103,7 @@ export async function getStudyQueue(
   let overrides: ItemStatusOverride[] = [];
   let sessions: StudySession[] = [];
   if (ids.length) {
-+    const externalIds = queueItems.map((item) => item.stable_external_id);
+    const externalIds = queueItems.map((item) => item.stable_external_id);
     const [{ data: overrideRows }, { data: sessionRows }, { data: legacySessionRows }] = await Promise.all([
       supabase.from("item_status_overrides").select("*").in("plan_item_id", ids),
       supabase.from("study_sessions").select("*").eq("workspace_id", workspaceId).in("plan_item_id", ids),
