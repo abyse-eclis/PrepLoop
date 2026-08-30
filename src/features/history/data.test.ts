@@ -9,6 +9,8 @@ function item(overrides: Partial<PlanItem>): PlanItem {
     plan_version_id: "version-1",
     plan_day_id: "day-1",
     date: "2026-08-01",
+    order_index: 1,
+    scheduled_at: null,
     stable_external_id: "2026-08-01-k001-002-006",
     subject: "MATHEMATICS",
     course_code: "K001",
