@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectQueueIds } from "./queue";
+import { classifyQueueState, selectQueueIds } from "./queue";
 import type { PlanItemStatus } from "@/lib/schemas/common";
 
 describe("rolling study queue", () => {
@@ -23,5 +23,25 @@ describe("rolling study queue", () => {
   it("returns a completed item to current when completion is undone", () => {
     const status = new Map<string, PlanItemStatus>([["first", "not_started"]]);
     expect(selectQueueIds(items, status, 1)).toEqual(["first"]);
+  });
+
+  it("selects an old planned-date item and accepts legacy actionable statuses", () => {
+    const legacy = Array.from({ length: 648 }, (_, index) => ({
+      id: `item-${index + 1}`,
+      orderIndex: index + 1,
+      scheduled: false,
+      plannedDate: "2024-01-01",
+    }));
+    const statuses = new Map<string, PlanItemStatus | string>([
+      ["item-1", "done"],
+      ["item-2", "completed"],
+      ["item-3", "planned"],
+    ]);
+    expect(selectQueueIds(legacy, statuses as Map<string, PlanItemStatus>, 8)[0]).toBe("item-3");
+    expect(classifyQueueState({ totalItems: 648, completedItems: 2, excludedItems: 0, candidateItems: 8 })).toBe("ready");
+  });
+
+  it("does not call a non-completed plan completed when its query has no candidate", () => {
+    expect(classifyQueueState({ totalItems: 648, completedItems: 2, excludedItems: 0, candidateItems: 0 })).toBe("inconsistent");
   });
 });

@@ -34,10 +34,13 @@ export function TodayView({ workspace, date, queue }: {
     </CardContent></Card>
 
     <section><h2 className="mb-3 text-sm font-semibold text-muted-foreground">กำลังเรียน</h2>
-      {queue.current ? <ItemRow row={queue.current} date={date} queuePosition={currentNumber ?? undefined} /> : <EmptyState
-        title={queue.totalItems > 0 ? "เรียนครบทุกรายการแล้ว" : "ยังไม่มีรายการในคิว"}
-        description="นำเข้าและเปิดใช้แผนเพื่อเริ่มเรียนตามลำดับ"
-        action={<Link href="/imports"><Button variant="outline">นำเข้าแผน</Button></Link>} />}
+      {queue.current ? <ItemRow row={queue.current} date={date} queuePosition={currentNumber ?? undefined} /> : queue.queueState === "inconsistent" ? <EmptyState
+        title="ไม่สามารถหาลำดับการเรียนปัจจุบันได้"
+        description={queue.queueError ?? "ข้อมูลแผนและสถานะคิวไม่สอดคล้องกัน"}
+        action={<Link href="/plan"><Button variant="outline">ตรวจแผนการเรียน</Button></Link>} /> : <EmptyState
+        title={queue.queueState === "completed" ? "เรียนครบทุกวิชาแล้ว" : "ยังไม่มีรายการในคิว"}
+        description={queue.queueState === "completed" ? "ทุกรายการในแผนเสร็จหรือถูกข้ามแล้ว" : "นำเข้าและเปิดใช้แผนเพื่อเริ่มเรียนตามลำดับ"}
+        action={queue.queueState === "empty" ? <Link href="/imports"><Button variant="outline">นำเข้าแผน</Button></Link> : undefined} />}
     </section>
 
     {queue.upcoming.length > 0 ? <Card><CardHeader><CardTitle>ถัดไป</CardTitle></CardHeader><CardContent><ol className="space-y-2">
