@@ -596,7 +596,13 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
   const versionId = (versionRow as { id: string }).id;
 
   let itemCount = 0;
-  for (const day of plan.days) {
+  let queuePosition = 1;
+  // A legacy plan's day order becomes its queue order. Sorting here makes the
+  // result deterministic even when JSON days were not chronologically ordered.
+  const orderedDays = plan.days
+    .map((day, sourceIndex) => ({ day, sourceIndex }))
+    .sort((a, b) => a.day.date.localeCompare(b.day.date) || a.sourceIndex - b.sourceIndex);
+  for (const { day } of orderedDays) {
     const { data: dayRow, error: dayErr } = await supabase
       .from("study_plan_days")
       .insert({
@@ -632,6 +638,8 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
         resource_label: item.resourceLabel ?? null,
         review_reference_ids: item.reviewReferenceIds ?? [],
         metadata: item.metadata ?? null,
+        order_index: queuePosition++,
+        scheduled_at: item.scheduledAt ?? null,
       }));
       const { error: itemErr } = await supabase
         .from("study_plan_items")

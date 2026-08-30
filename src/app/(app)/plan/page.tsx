@@ -14,7 +14,7 @@ import {
   ActivateButton,
   RecoveryPanel,
 } from "@/features/plans/plan-actions-client";
-import type { PlanItem, PlanVersion } from "@/types/db";
+import type { ItemStatusOverride, PlanItem, PlanVersion, StudySession } from "@/types/db";
 import type { PlanItemInput } from "@/lib/schemas/study-plan";
 
 export const dynamic = "force-dynamic";
@@ -79,13 +79,24 @@ export default async function PlanPage({
 
   let items: PlanItem[] = [];
   let parentItems: PlanItem[] = [];
+  let overrides: ItemStatusOverride[] = [];
+  let sessions: StudySession[] = [];
   if (selected) {
     const { data: itemData } = await supabase
       .from("study_plan_items")
       .select("*")
       .eq("plan_version_id", selected.id)
-      .order("date", { ascending: true });
+      .order("order_index", { ascending: true });
     items = (itemData as PlanItem[] | null) ?? [];
+    if (items.length) {
+      const ids = items.map((i) => i.id);
+      const [{ data: overrideData }, { data: sessionData }] = await Promise.all([
+        supabase.from("item_status_overrides").select("*").in("plan_item_id", ids),
+        supabase.from("study_sessions").select("*").in("plan_item_id", ids),
+      ]);
+      overrides = (overrideData as ItemStatusOverride[] | null) ?? [];
+      sessions = (sessionData as StudySession[] | null) ?? [];
+    }
 
     if (selected.parent_version_id) {
       const { data: parentData } = await supabase
@@ -288,10 +299,10 @@ export default async function PlanPage({
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>ตารางเรียน</CardTitle>
+                    <CardTitle>Study Queue</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <PlanSchedule items={items} />
+                    <PlanSchedule items={items} overrides={overrides} sessions={sessions} />
                   </CardContent>
                 </Card>
               </>
