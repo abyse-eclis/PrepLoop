@@ -13,6 +13,8 @@ function planItem(overrides: Partial<PlanItem>): PlanItem {
     plan_version_id: "version-1",
     plan_day_id: "day-1",
     date: "2026-08-05",
+    order_index: 1,
+    scheduled_at: null,
     stable_external_id: "2026-08-05-item",
     subject: "TGAT1",
     course_code: null,

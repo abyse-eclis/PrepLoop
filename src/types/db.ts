@@ -41,6 +41,10 @@ export interface PlanItem {
   plan_version_id: string;
   plan_day_id: string;
   date: string;
+  /** Canonical queue position. `date` is retained only as legacy metadata. */
+  order_index: number;
+  /** A real appointment time for mocks/events; null for rolling queue work. */
+  scheduled_at: string | null;
   stable_external_id: string;
   subject: string;
   course_code: string | null;

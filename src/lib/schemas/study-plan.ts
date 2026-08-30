@@ -31,6 +31,7 @@ export const planItemSchema = z
     resourceLabel: z.string().optional(),
     reviewReferenceIds: z.array(z.string()).optional().default([]),
     metadata: z.record(z.string(), z.any()).optional(),
+    scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
   })
   .transform((item) => {
     const fallbackResourceUrl =

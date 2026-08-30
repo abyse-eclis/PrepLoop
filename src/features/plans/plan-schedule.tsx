@@ -1,193 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { PlanItem } from "@/types/db";
+import type { ItemStatusOverride, PlanItem, StudySession } from "@/types/db";
 import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
 import { Combobox } from "@/components/ui/combobox";
-import { formatDateKeyThai } from "@/lib/dates";
-import { buttonVariants } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
-import { getPlanItemResource } from "@/lib/plans/resource";
 
-type Grouping = "day" | "week" | "month";
+const terminal = new Set(["completed", "cancelled"]);
 
-export function PlanSchedule({ items }: { items: PlanItem[] }) {
+/** Plan is intentionally rendered by canonical queue position, not legacy date. */
+export function PlanSchedule({ items, overrides, sessions }: {
+  items: PlanItem[]; overrides: ItemStatusOverride[]; sessions: StudySession[];
+}) {
   const [subject, setSubject] = useState("");
-  const [activity, setActivity] = useState("");
-  const [grouping, setGrouping] = useState<Grouping>("day");
-
-  const subjects = useMemo(
-    () => Array.from(new Set(items.map((i) => i.subject))).sort(),
-    [items]
-  );
-  const activities = useMemo(
-    () => Array.from(new Set(items.map((i) => i.activity_type))).sort(),
-    [items]
-  );
-
-  const filtered = items.filter(
-    (i) =>
-      (!subject || i.subject === subject) &&
-      (!activity || i.activity_type === activity)
-  );
-
-  const groups = useMemo(() => {
-    const map = new Map<string, PlanItem[]>();
-    for (const item of filtered) {
-      let key = item.date;
-      if (grouping === "week") key = weekLabel(item.date);
-      else if (grouping === "month") key = item.date.slice(0, 7);
-      const arr = map.get(key) ?? [];
-      arr.push(item);
-      map.set(key, arr);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered, grouping]);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
-        <div className="w-36">
-          <Combobox
-            value={grouping}
-            onValueChange={(v) => setGrouping((v as Grouping) ?? "day")}
-            options={[
-              { value: "day", label: "รายวัน" },
-              { value: "week", label: "รายสัปดาห์" },
-              { value: "month", label: "รายเดือน" },
-            ]}
-            searchable={false}
-            aria-label="การจัดกลุ่ม"
-          />
-        </div>
-        <div className="w-40">
-          <Combobox
-            value={subject || null}
-            onValueChange={(v) => setSubject(v ?? "")}
-            options={[
-              { value: "", label: "ทุกวิชา" },
-              ...subjects.map((s) => ({ value: s, label: subjectLabel(s) })),
-            ]}
-            placeholder="ทุกวิชา"
-            searchable={subjects.length > 8}
-            aria-label="กรองตามวิชา"
-          />
-        </div>
-        <div className="w-40">
-          <Combobox
-            value={activity || null}
-            onValueChange={(v) => setActivity(v ?? "")}
-            options={[
-              { value: "", label: "ทุกกิจกรรม" },
-              ...activities.map((a) => ({ value: a, label: activityLabel(a) })),
-            ]}
-            placeholder="ทุกกิจกรรม"
-            searchable={false}
-            aria-label="กรองตามกิจกรรม"
-          />
-        </div>
-      </div>
-
-      {groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">ไม่มีรายการตามตัวกรอง</p>
-      ) : (
-        groups.map(([key, groupItems]) => {
-          const totalMin = groupItems.reduce((s, i) => s + i.target_minutes, 0);
-          return (
-            <div key={key} className="rounded-lg border border-border">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <span className="text-sm font-medium">
-                  {grouping === "day" ? formatDateKeyThai(key) : key}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {groupItems.length} รายการ · {totalMin} นาที
-                </span>
-              </div>
-              <div className="scroll-x">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="px-3 py-1.5 font-medium">วิชา</th>
-                      <th className="px-3 py-1.5 font-medium">คอร์ส/คลิป</th>
-                      <th className="px-3 py-1.5 font-medium">กิจกรรม</th>
-                      <th className="px-3 py-1.5 font-medium">เป้าหมาย</th>
-                      <th className="px-3 py-1.5 font-medium">ความสำคัญ</th>
-                      <th className="px-3 py-1.5 font-medium">แหล่งเรียน</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupItems.map((i) => {
-                      const resource = getPlanItemResource(i);
-                      return (
-                        <tr key={i.id} className="border-t border-border/60">
-                          <td className="px-3 py-1.5">{subjectLabel(i.subject)}</td>
-                          <td className="px-3 py-1.5 text-muted-foreground">
-                            {i.course_code ?? "-"}
-                            {i.lesson_from ? ` · ${i.lesson_from}` : ""}
-                            {i.lesson_to && i.lesson_to !== i.lesson_from
-                              ? `–${i.lesson_to}`
-                              : ""}
-                          </td>
-                          <td className="px-3 py-1.5">
-                            {activityLabel(i.activity_type)}
-                          </td>
-                          <td className="px-3 py-1.5 tabular-nums">
-                            {i.target_minutes}น.
-                          </td>
-                          <td className="px-3 py-1.5">{i.priority}</td>
-                          <td className="px-3 py-1.5">
-                            {resource ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                {resource.sourceName ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    {resource.sourceName}
-                                  </span>
-                                ) : null}
-                                <a
-                                  href={resource.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  aria-label={`${resource.label}สำหรับ ${subjectLabel(i.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
-                                  title={resource.tooltip}
-                                  className={buttonVariants({
-                                    variant: "outline",
-                                    size: "sm",
-                                  })}
-                                >
-                                <ExternalLink
-                                  className="h-3.5 w-3.5"
-                                  aria-hidden="true"
-                                />
-                                  {resource.label}
-                                </a>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })
-      )}
+  const subjects = useMemo(() => Array.from(new Set(items.map((i) => i.subject))).sort(), [items]);
+  const statusById = useMemo(() => new Map(overrides.map((o) => [o.plan_item_id, o.status])), [overrides]);
+  const minutesById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of sessions) if (session.plan_item_id) map.set(session.plan_item_id, (map.get(session.plan_item_id) ?? 0) + Math.max(0, session.duration_minutes));
+    return map;
+  }, [sessions]);
+  const ordered = [...items].sort((a, b) => a.order_index - b.order_index);
+  const currentId = ordered.find((i) => !terminal.has(statusById.get(i.id) ?? "not_started") && !i.scheduled_at)?.id;
+  const filtered = ordered.filter((i) => !subject || i.subject === subject);
+  return <div className="flex flex-col gap-4">
+    <div className="w-48"><Combobox value={subject || null} onValueChange={(v) => setSubject(v ?? "")} options={[{ value: "", label: "ทุกวิชา" }, ...subjects.map((s) => ({ value: s, label: subjectLabel(s) }))]} placeholder="ทุกวิชา" searchable={subjects.length > 8} aria-label="กรองตามวิชา" /></div>
+    <div className="divide-y divide-border rounded-lg border border-border">
+      {filtered.map((item) => {
+        const status = statusById.get(item.id) ?? "not_started";
+        const actual = minutesById.get(item.id) ?? 0;
+        const isCurrent = item.id === currentId;
+        const marker = status === "completed" ? "✓" : isCurrent ? "→" : status === "cancelled" ? "—" : "○";
+        return <div key={item.id} className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${isCurrent ? "bg-accent/60" : ""}`}>
+          <span className="w-5 text-center font-semibold" aria-hidden>{marker}</span><span className="w-12 tabular-nums text-muted-foreground">#{item.order_index}</span>
+          <div className="min-w-0 flex-1"><div className="font-medium">{subjectLabel(item.subject)}{item.course_code ? ` · ${item.course_code}` : ""}{item.lesson_from ? ` (${item.lesson_from}${item.lesson_to && item.lesson_to !== item.lesson_from ? `–${item.lesson_to}` : ""})` : ""}</div><div className="text-xs text-muted-foreground">{activityLabel(item.activity_type)}{isCurrent ? " · กำลังเรียน" : status === "completed" ? " · เสร็จแล้ว" : " · Upcoming"}{item.scheduled_at ? ` · กำหนด ${new Date(item.scheduled_at).toLocaleString("th-TH")}` : ""}</div></div>
+          <span className="tabular-nums text-muted-foreground">{actual} / {item.target_minutes} นาที</span>
+        </div>;
+      })}
+      {filtered.length === 0 ? <p className="p-4 text-sm text-muted-foreground">ไม่มีรายการตามตัวกรอง</p> : null}
     </div>
-  );
-}
-
-function weekLabel(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(Date.UTC(y!, m! - 1, d!));
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(
-    ((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-  );
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+  </div>;
 }

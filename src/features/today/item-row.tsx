@@ -23,7 +23,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 
 const ASSESSMENT_TYPES = new Set(["diagnostic", "quiz", "exercise", "mock"]);
 
-export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) {
+export function ItemRow({ row, date, queuePosition }: { row: ResolvedPlanItem; date: string; queuePosition?: number }) {
   const { item } = row;
   const [openTime, setOpenTime] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -46,6 +46,7 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              {queuePosition ? <span className="text-xs tabular-nums text-muted-foreground">#{queuePosition}</span> : null}
               <span className="font-medium">{subjectLabel(item.subject)}</span>
               {item.course_code ? (
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
@@ -79,6 +80,7 @@ export function ItemRow({ row, date }: { row: ResolvedPlanItem; date: string }) 
             <div className="mt-1 text-xs text-muted-foreground tabular-nums">
               {row.actualMinutes}/{item.target_minutes} นาที
             </div>
+            <div className="text-xs text-muted-foreground">เหลือประมาณ {Math.max(0, item.target_minutes - row.actualMinutes)} นาที</div>
           </div>
         </div>
 
