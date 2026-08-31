@@ -4,7 +4,9 @@ import { useState, useTransition, useEffect } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { TimePicker24h } from "@/components/ui/time-picker";
 import { useToast } from "@/components/ui/toast";
+import { validateIntervals } from "@/lib/dates";
 import {
   EXAM_CATEGORIES,
   getSubjectsForCategory,
@@ -14,6 +16,11 @@ import {
   updateCustomStudyItem,
 } from "./actions";
 import type { CustomStudyItem } from "@/types/db";
+
+interface Interval {
+  start: string;
+  end: string;
+}
 
 interface CustomStudyDialogProps {
   open: boolean;
@@ -38,6 +45,7 @@ export function CustomStudyDialog({
   const [customSubject, setCustomSubject] = useState("");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
+  const [intervals, setIntervals] = useState<Interval[]>([{ start: "", end: "" }]);
   const [estimatedMinutes, setEstimatedMinutes] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +60,7 @@ export function CustomStudyDialog({
         setTitle(item.title);
         setUrl(item.url ?? "");
         setEstimatedMinutes(item.estimated_minutes ? String(item.estimated_minutes) : "");
+        setIntervals([{ start: "", end: "" }]);
         setNotes(item.notes ?? "");
       } else {
         setExamCategory("A-Level");
@@ -60,6 +69,7 @@ export function CustomStudyDialog({
         setTitle("");
         setUrl("");
         setEstimatedMinutes("");
+        setIntervals([{ start: "", end: "" }]);
         setNotes("");
       }
       setError(null);
@@ -72,6 +82,16 @@ export function CustomStudyDialog({
     const available = getSubjectsForCategory(newCategory);
     setSubject(available[0] ?? "อื่น ๆ");
   }
+
+  function updateInterval(idx: number, key: keyof Interval, value: string) {
+    setIntervals((prev) =>
+      prev.map((iv, i) => (i === idx ? { ...iv, [key]: value } : iv))
+    );
+  }
+
+  const filledIntervals = intervals.filter((i) => i.start && i.end);
+  const intervalPreview =
+    filledIntervals.length > 0 ? validateIntervals(filledIntervals) : null;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,7 +107,18 @@ export function CustomStudyDialog({
       return;
     }
 
-    const estMins = estimatedMinutes.trim() ? parseInt(estimatedMinutes, 10) : null;
+    if (filledIntervals.length > 0 && intervalPreview && !intervalPreview.ok) {
+      setError(intervalPreview.errors.join("; "));
+      return;
+    }
+
+    let estMins: number | null = null;
+    if (intervalPreview && intervalPreview.ok) {
+      estMins = intervalPreview.totalMinutes;
+    } else if (estimatedMinutes.trim()) {
+      estMins = parseInt(estimatedMinutes, 10);
+    }
+
     if (estMins !== null && (isNaN(estMins) || estMins <= 0)) {
       setError("เวลาที่คาดว่าจะเรียนต้องเป็นตัวเลขมากกว่า 0");
       return;
@@ -215,17 +246,95 @@ export function CustomStudyDialog({
           </p>
         </div>
 
-        {/* Estimated Minutes */}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-sm font-medium">เวลาที่คาดว่าจะเรียน (นาที)</Label>
-          <Input
-            type="number"
-            min="1"
-            max="1440"
-            value={estimatedMinutes}
-            onChange={(e) => setEstimatedMinutes(e.target.value)}
-            placeholder="เช่น 30, 45, 60"
-          />
+        {/* Estimated Time Intervals */}
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">ช่วงเวลาที่คาดว่าจะเรียน</Label>
+            {intervalPreview && intervalPreview.ok ? (
+              <span className="text-xs font-semibold text-primary">
+                รวมทั้งหมด {intervalPreview.totalMinutes} นาที
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            เวลาแบบ 24 ชั่วโมง (เช่น 13:00–14:30) · คำนวณนาทีให้อัตโนมัติ
+          </p>
+
+          {intervals.map((iv, idx) => {
+            const one = iv.start && iv.end ? validateIntervals([iv]) : null;
+            const crosses = one?.details[0]?.crossesMidnight ?? false;
+            return (
+              <div key={idx} className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">เริ่ม</Label>
+                  <TimePicker24h
+                    value={iv.start}
+                    onChange={(v) => updateInterval(idx, "start", v)}
+                    aria-label="เวลาเริ่ม"
+                  />
+                </div>
+                <span className="pb-2 text-muted-foreground">–</span>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">สิ้นสุด</Label>
+                  <TimePicker24h
+                    value={iv.end}
+                    onChange={(v) => updateInterval(idx, "end", v)}
+                    aria-label="เวลาสิ้นสุด"
+                  />
+                </div>
+                {crosses ? (
+                  <span className="pb-2 text-xs text-yellow-500 dark:text-yellow-300">
+                    สิ้นสุดวันถัดไป
+                  </span>
+                ) : null}
+                {intervals.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() =>
+                      setIntervals((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                  >
+                    ลบ
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() =>
+                setIntervals((prev) => [...prev, { start: "", end: "" }])
+              }
+            >
+              + เพิ่มช่วงเวลา
+            </Button>
+
+            <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>หรือระบุนาที:</span>
+              <Input
+                type="number"
+                min="1"
+                max="1440"
+                value={
+                  intervalPreview && intervalPreview.ok
+                    ? String(intervalPreview.totalMinutes)
+                    : estimatedMinutes
+                }
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                placeholder="เช่น 45"
+                className="h-8 w-20 text-xs"
+                disabled={Boolean(intervalPreview && intervalPreview.ok)}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Notes */}

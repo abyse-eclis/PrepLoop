@@ -13,11 +13,22 @@ function norm(value: string | null | undefined): string {
 
 export function findPlanItemForSession(
   session: StudySession,
-  planItems: PlanItem[]
+  planItems: PlanItem[],
+  historicalItems: Array<{ id: string; stable_external_id?: string | null }> = []
 ): Omit<SessionPlanMatch, "session"> {
   if (session.plan_item_id) {
     const planItem = planItems.find((item) => item.id === session.plan_item_id);
     if (planItem) return { planItem, reason: "plan_item_id" };
+
+    if (historicalItems.length > 0) {
+      const hist = historicalItems.find((h) => h.id === session.plan_item_id);
+      if (hist?.stable_external_id) {
+        const matched = planItems.find(
+          (item) => item.stable_external_id === hist.stable_external_id
+        );
+        if (matched) return { planItem: matched, reason: "source_activity_id" };
+      }
+    }
   }
 
   if (session.source_activity_id) {
@@ -50,7 +61,8 @@ export function findPlanItemForSession(
 
 export function groupSessionsByPlanItem(
   sessions: StudySession[],
-  planItems: PlanItem[]
+  planItems: PlanItem[],
+  historicalItems: Array<{ id: string; stable_external_id?: string | null }> = []
 ): {
   sessionsByPlanItemId: Map<string, StudySession[]>;
   matches: SessionPlanMatch[];
@@ -61,7 +73,7 @@ export function groupSessionsByPlanItem(
   const unplanned: StudySession[] = [];
 
   for (const session of sessions) {
-    const match = findPlanItemForSession(session, planItems);
+    const match = findPlanItemForSession(session, planItems, historicalItems);
     matches.push({ session, ...match });
     if (match.planItem) {
       const arr = sessionsByPlanItemId.get(match.planItem.id) ?? [];

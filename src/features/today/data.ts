@@ -8,6 +8,7 @@ import {
   getActivePlanVersion,
   getPlanDayTarget,
   getPlanVersionSummaries,
+  resolvePlanItems,
   PLAN_ITEM_COLUMNS,
   STUDY_SESSION_COLUMNS,
   type ResolvedPlanItem,
@@ -217,24 +218,13 @@ export async function getStudyQueue(
     lessonPrerequisites,
   };
 
-  // Fetch all plan items, overrides, and sessions for the active version
-  const [{ data: itemRows, error: itemError }, { data: overrideRows }, { data: sessionRows }] =
-    await Promise.all([
-      supabase
-        .from("study_plan_items")
-        .select(PLAN_ITEM_COLUMNS)
-        .eq("workspace_id", workspaceId)
-        .eq("plan_version_id", activeVersion.id)
-        .order("order_index", { ascending: true }),
-      supabase
-        .from("item_status_overrides")
-        .select("id, plan_item_id, status, actual_lesson_from, actual_lesson_to")
-        .eq("workspace_id", workspaceId),
-      supabase
-        .from("study_sessions")
-        .select(STUDY_SESSION_COLUMNS)
-        .eq("workspace_id", workspaceId),
-    ]);
+  // Fetch all plan items for the active version
+  const { data: itemRows, error: itemError } = await supabase
+    .from("study_plan_items")
+    .select(PLAN_ITEM_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("plan_version_id", activeVersion.id)
+    .order("order_index", { ascending: true });
 
   if (itemError) {
     return {
@@ -257,41 +247,7 @@ export async function getStudyQueue(
   }
 
   const allItems = ((itemRows as unknown) as PlanItem[] | null) ?? [];
-  const overrides = (overrideRows as ItemStatusOverride[] | null) ?? [];
-  const allSessions = ((sessionRows as unknown) as StudySession[] | null) ?? [];
-
-  const overrideMap = new Map<string, ItemStatusOverride>(
-    overrides.map((o) => [o.plan_item_id, o])
-  );
-
-  const sessionMap = new Map<string, StudySession[]>();
-  for (const s of allSessions) {
-    if (s.plan_item_id) {
-      const arr = sessionMap.get(s.plan_item_id) ?? [];
-      arr.push(s);
-      sessionMap.set(s.plan_item_id, arr);
-    }
-  }
-
-  // Resolve each plan item with its status and actual minutes
-  const resolvedItems: ResolvedPlanItem[] = allItems.map((item) => {
-    const itemSessions = sessionMap.get(item.id) ?? [];
-    const actualMinutes = itemSessions.reduce(
-      (sum, s) => sum + (s.duration_minutes ?? 0),
-      0
-    );
-    const override = overrideMap.get(item.id);
-    const status: PlanItemStatus =
-      (override?.status as PlanItemStatus) ??
-      (actualMinutes >= item.target_minutes ? "completed" : "not_started");
-
-    return {
-      item,
-      status,
-      sessions: itemSessions,
-      actualMinutes,
-    };
-  });
+  const resolvedItems = await resolvePlanItems(workspaceId, allItems);
 
   // Calculate completion stats across the active plan
   const totalItems = resolvedItems.length;
