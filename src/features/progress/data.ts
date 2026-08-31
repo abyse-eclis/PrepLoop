@@ -1,7 +1,13 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getItemsForDate } from "@/features/plans/data";
 import { daySummary, timeCompletion } from "@/lib/calculations";
-import { addDays, isoWeekKey, monthKey } from "@/lib/dates";
+import {
+  addDays,
+  isoWeekKey,
+  monthKey,
+  weekBounds,
+  monthBounds,
+} from "@/lib/dates";
 import type { AssessmentAttempt, StudySession } from "@/types/db";
 
 export interface DailyProgress {
@@ -15,6 +21,8 @@ export interface DailyProgress {
   completedItems: number;
   totalItems: number;
   pendingItems: number;
+  /** Items left out of the day because they were skipped or cancelled. */
+  excludedItems: number;
   reviewDue: number;
   attemptCount: number;
   planVersionName: string | null;
@@ -25,21 +33,17 @@ export async function getDailyProgress(
   date: string
 ): Promise<DailyProgress> {
   const { version, items } = await getItemsForDate(workspaceId, date);
-  const summary = daySummary({
-    items: items.map((r) => ({
-      priority: r.item.priority,
-      targetMinutes: r.item.target_minutes,
-      status: r.status,
-    })),
-    actualMinutesByItem: items.map((r) => r.actualMinutes),
-  });
 
   const supabase = await createServerSupabase();
-  const [{ count: sessionCount }, { count: reviewDue }, { count: attemptCount }] =
+  const [
+    { data: sessionRows, count: sessionCount },
+    { count: reviewDue },
+    { count: attemptCount },
+  ] =
     await Promise.all([
       supabase
         .from("study_sessions")
-        .select("id", { count: "exact", head: true })
+        .select("duration_minutes", { count: "exact" })
         .eq("workspace_id", workspaceId)
         .eq("session_date", date),
       supabase
@@ -54,6 +58,17 @@ export async function getDailyProgress(
         .eq("workspace_id", workspaceId)
         .eq("attempt_date", date),
     ]);
+  const actualMinutes = (
+    (sessionRows as Array<{ duration_minutes: number }> | null) ?? []
+  ).reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
+  const summary = daySummary({
+    items: items.map((r) => ({
+      priority: r.item.priority,
+      targetMinutes: r.item.target_minutes,
+      status: r.status,
+    })),
+    actualMinutesByItem: [actualMinutes],
+  });
 
   return {
     date,
@@ -66,6 +81,7 @@ export async function getDailyProgress(
     completedItems: summary.completedItems,
     totalItems: summary.totalItems,
     pendingItems: summary.pendingItems,
+    excludedItems: summary.excludedItems,
     reviewDue: reviewDue ?? 0,
     attemptCount: attemptCount ?? 0,
     planVersionName: version?.name ?? null,
@@ -193,23 +209,4 @@ export async function getRangeProgress(
   };
 }
 
-export function weekBounds(dateKey: string): { start: string; end: string } {
-  // ISO week: Monday..Sunday
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(Date.UTC(y!, m! - 1, d!));
-  const day = date.getUTCDay() || 7;
-  const monday = addDays(dateKey, -(day - 1));
-  return { start: monday, end: addDays(monday, 6) };
-}
-
-export function monthBounds(dateKey: string): { start: string; end: string } {
-  const [y, m] = dateKey.split("-").map(Number);
-  const start = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
-  const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
-  const end = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(
-    lastDay
-  ).padStart(2, "0")}`;
-  return { start, end };
-}
-
-export { isoWeekKey, monthKey };
+export { isoWeekKey, monthKey, weekBounds, monthBounds };

@@ -8,6 +8,7 @@ export const STATUS_LABELS: Record<PlanItemStatus, string> = {
   incomplete: "ทำไม่ครบ",
   needs_review: "ต้องทบทวน",
   recovery: "Recovery",
+  skipped: "ข้าม (ไม่เรียนแล้ว)",
   cancelled: "ยกเลิกตามแผนใหม่",
 };
 
@@ -19,6 +20,7 @@ export const STATUS_CLASS: Record<PlanItemStatus, string> = {
   incomplete: "status-incomplete",
   needs_review: "status-needs_review",
   recovery: "status-recovery",
+  skipped: "status-skipped",
   cancelled: "status-cancelled",
 };
 

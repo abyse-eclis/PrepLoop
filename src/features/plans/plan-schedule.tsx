@@ -8,9 +8,8 @@ import { Combobox } from "@/components/ui/combobox";
 
 const terminal = new Set(["completed", "cancelled"]);
 
-/** Plan is intentionally rendered by canonical queue position, not legacy date. */
-export function PlanSchedule({ items, overrides, sessions }: {
-  items: PlanItem[]; overrides: ItemStatusOverride[]; sessions: StudySession[];
+export function PlanSchedule({ items, overrides = [], sessions = [] }: {
+  items: PlanItem[]; overrides?: ItemStatusOverride[]; sessions?: StudySession[];
 }) {
   const [subject, setSubject] = useState("");
   const subjects = useMemo(() => Array.from(new Set(items.map((i) => i.subject))).sort(), [items]);

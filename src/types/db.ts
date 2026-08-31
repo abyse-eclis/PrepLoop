@@ -110,6 +110,8 @@ export interface StudySession {
   completed?: boolean | null;
   video_progress_start?: number | null;
   video_progress_end?: number | null;
+  custom_study_item_id?: string | null;
+  exam_category?: string | null;
   import_dedup_key: string | null;
   created_at: string;
   updated_at: string;
@@ -211,3 +213,35 @@ export interface SourceFile {
   storage_path: string | null;
   size_bytes: number | null;
 }
+
+export interface OrderedTaskRef {
+  id: string;
+  type?: "plan_item" | "review_task" | string;
+}
+
+export interface DailyExecutionOrder {
+  id: string;
+  workspace_id: string;
+  execution_date: string;
+  ordered_item_ids: string[] | OrderedTaskRef[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomStudyItem {
+  id: string;
+  workspace_id: string;
+  study_date: string;
+  exam_category: string;
+  subject: string;
+  custom_subject: string | null;
+  title: string;
+  url: string | null;
+  estimated_minutes: number | null;
+  notes: string | null;
+  status: "not_started" | "studying" | "paused" | "completed";
+  created_at: string;
+  updated_at: string;
+}
+
+

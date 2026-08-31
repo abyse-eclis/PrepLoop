@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  dateRange,
   daysBetween,
   durationMinutes,
   formatDateKeyThai,
   formatMinutesToTime,
   isoWeekKey,
   isValidDateString,
+  monthBounds,
+  weekBounds,
   parseTimeToMinutes,
   timeToMinutes,
   toBuddhistYear,
@@ -129,6 +132,43 @@ describe("date keys", () => {
   });
   it("computes iso week key deterministically", () => {
     expect(isoWeekKey("2026-08-03")).toMatch(/^\d{4}-W\d{2}$/);
+  });
+});
+
+describe("period bounds", () => {
+  it("returns Monday..Sunday for any day of the week", () => {
+    expect(weekBounds("2026-08-20")).toEqual({
+      start: "2026-08-17",
+      end: "2026-08-23",
+    });
+    expect(weekBounds("2026-08-17")).toEqual({
+      start: "2026-08-17",
+      end: "2026-08-23",
+    });
+    expect(weekBounds("2026-08-23")).toEqual({
+      start: "2026-08-17",
+      end: "2026-08-23",
+    });
+  });
+
+  it("returns the full calendar month, including February", () => {
+    expect(monthBounds("2026-08-20")).toEqual({
+      start: "2026-08-01",
+      end: "2026-08-31",
+    });
+    expect(monthBounds("2026-02-10").end).toBe("2026-02-28");
+    expect(monthBounds("2028-02-10").end).toBe("2028-02-29");
+  });
+
+  it("lists every date in an inclusive range", () => {
+    expect(dateRange("2026-08-30", "2026-09-02")).toEqual([
+      "2026-08-30",
+      "2026-08-31",
+      "2026-09-01",
+      "2026-09-02",
+    ]);
+    expect(dateRange("2026-08-30", "2026-08-30")).toEqual(["2026-08-30"]);
+    expect(dateRange("2026-08-30", "2026-08-29")).toEqual([]);
   });
 });
 

@@ -4,11 +4,13 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { todayInTimezone, addDays } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/misc";
+import { EmptyState, Stat } from "@/components/ui/misc";
 import { ReviewItem } from "@/features/reviews/review-item";
+import { getReviewPageData } from "@/features/reviews/data";
 import { ReviewAiPanel, type ReviewCandidate } from "@/features/reviews/ai-panel";
+import { RecoveryPanel } from "@/features/plans/plan-actions-client";
 import { subjectLabel } from "@/lib/subjects";
-import type { ReviewTask, StudySession, AssessmentAttempt } from "@/types/db";
+import type { AssessmentAttempt, ReviewTask, StudySession } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 
@@ -28,23 +30,94 @@ export default async function ReviewsPage() {
   }
 
   const today = todayInTimezone(workspace.timezone);
+  const data = await getReviewPageData(workspace.id, today);
   const supabase = await createServerSupabase();
-  const [{ data }, { data: sessionsData }, { data: attemptsData }, { data: errorsData }] = await Promise.all([
-    supabase.from("review_tasks").select("*").eq("workspace_id", workspace.id).order("due_date", { ascending: true }),
-    supabase.from("study_sessions").select("*").eq("workspace_id", workspace.id).not("note", "is", null).order("session_date", { ascending: false }).limit(30),
-    supabase.from("assessment_attempts").select("*").eq("workspace_id", workspace.id).order("attempt_date", { ascending: false }).limit(30),
-    supabase.from("error_logs").select("id, subject, topic, note, score, max_score, created_at, error_type").eq("workspace_id", workspace.id).order("created_at", { ascending: false }).limit(30),
-  ]);
-  const reviews = (data as ReviewTask[] | null) ?? [];
+  const [{ data: sessionsData }, { data: attemptsData }, { data: errorsData }] =
+    await Promise.all([
+      supabase
+        .from("study_sessions")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .not("note", "is", null)
+        .order("session_date", { ascending: false })
+        .limit(30),
+      supabase
+        .from("assessment_attempts")
+        .select("*")
+        .eq("workspace_id", workspace.id)
+        .order("attempt_date", { ascending: false })
+        .limit(30),
+      supabase
+        .from("error_logs")
+        .select("id, subject, topic, note, score, max_score, created_at, error_type")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
   const sessions = (sessionsData as StudySession[] | null) ?? [];
   const attempts = (attemptsData as AssessmentAttempt[] | null) ?? [];
+  const errors =
+    (errorsData as
+      | Array<{
+          id: string;
+          subject: string | null;
+          topic: string | null;
+          note: string | null;
+          score: number | null;
+          max_score: number | null;
+          created_at: string;
+          error_type: string;
+        }>
+      | null) ?? [];
   const candidates: ReviewCandidate[] = [
-    ...sessions.filter((s) => s.note).map((s) => ({ id: s.id, topic: s.lesson_title ?? s.actual_lesson_from ?? s.course_code ?? s.subject ?? "หัวข้อที่บันทึกไว้", subject: subjectLabel(s.subject), courseCode: s.course_code, note: s.note, source: "Study Session note", lastDate: s.session_date, sufficient: false })),
-    ...attempts.filter((a) => a.percentage !== null && a.percentage < a.passing_percentage).map((a) => ({ id: a.id, topic: a.notes ?? a.subject ?? "แบบทดสอบ", subject: subjectLabel(a.subject), score: `${a.score}/${a.max_score}`, source: "Assessment", lastDate: a.attempt_date, sufficient: true })),
-    ...((errorsData as Array<{ id: string; subject: string | null; topic: string | null; note: string | null; score: number | null; max_score: number | null; created_at: string; error_type: string }> | null) ?? []).map((e) => ({ id: e.id, topic: e.topic ?? e.error_type, subject: subjectLabel(e.subject), note: e.note, score: e.score !== null && e.max_score !== null ? `${e.score}/${e.max_score}` : null, source: "Error log", lastDate: e.created_at.slice(0,10), sufficient: true })),
+    ...sessions
+      .filter((session) => session.note)
+      .map((session) => ({
+        id: session.id,
+        topic:
+          session.lesson_title ??
+          session.actual_lesson_from ??
+          session.course_code ??
+          session.subject ??
+          "หัวข้อที่บันทึกไว้",
+        subject: subjectLabel(session.subject),
+        courseCode: session.course_code,
+        note: session.note,
+        source: "Study Session note",
+        lastDate: session.session_date,
+        sufficient: false,
+      })),
+    ...attempts
+      .filter(
+        (attempt) =>
+          attempt.percentage !== null &&
+          attempt.percentage < attempt.passing_percentage
+      )
+      .map((attempt) => ({
+        id: attempt.id,
+        topic: attempt.notes ?? attempt.subject ?? "แบบทดสอบ",
+        subject: subjectLabel(attempt.subject),
+        score: `${attempt.score}/${attempt.max_score}`,
+        source: "Assessment",
+        lastDate: attempt.attempt_date,
+        sufficient: true,
+      })),
+    ...errors.map((error) => ({
+      id: error.id,
+      topic: error.topic ?? error.error_type,
+      subject: subjectLabel(error.subject),
+      note: error.note,
+      score:
+        error.score !== null && error.max_score !== null
+          ? `${error.score}/${error.max_score}`
+          : null,
+      source: "Error log",
+      lastDate: error.created_at.slice(0, 10),
+      sufficient: true,
+    })),
   ];
 
-  const pending = reviews.filter((r) => r.status === "pending");
+  const pending = data.pendingReviews;
   const buckets: Array<{ key: string; label: string; items: ReviewTask[] }> = [
     { key: "overdue", label: "เกินกำหนด", items: pending.filter((r) => r.due_date < today) },
     { key: "today", label: "วันนี้", items: pending.filter((r) => r.due_date === today) },
@@ -74,21 +147,50 @@ export default async function ReviewsPage() {
     },
   ];
 
-  const done = reviews.filter((r) => r.status !== "pending").slice(0, 20);
+  const done = data.recentDone;
 
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-bold">งานทบทวน</h1>
         <p className="text-sm text-muted-foreground">
-          ทบทวนตามรอบ spaced repetition และบันทึกผล
+          ทบทวนตามรอบ spaced repetition และวิเคราะห์จุดอ่อนจากข้อมูลจริงเมื่อกดสั่งงาน
         </p>
       </header>
 
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat
+          label="Study Session"
+          value={data.evidence.studySessions}
+          hint="พร้อมใช้เป็น evidence"
+        />
+        <Stat
+          label="Quiz / Mock"
+          value={data.evidence.assessmentAttempts}
+          hint="ผลสอบที่บันทึกแล้ว"
+        />
+        <Stat
+          label="Weakness"
+          value={data.evidence.weaknesses}
+          hint="จาก topic/error logs"
+        />
+        <Stat
+          label="Review pending"
+          value={data.evidence.pendingReviews}
+          hint="ไม่ได้โหลด raw notes"
+        />
+      </section>
+
+      <RecoveryPanel
+        title="วิเคราะห์จุดอ่อน"
+        description="ระบบจะค่อย fetch evidence และสร้าง preview ของแผนทบทวนเพิ่มเติมเมื่อกดวิเคราะห์เท่านั้น"
+        actionLabel="วิเคราะห์จุดอ่อน"
+      />
+
       {pending.length === 0 ? (
         <EmptyState
-          title="ไม่มีงานทบทวนที่ค้าง"
-          description="ยังไม่มีงานจาก spaced repetition แต่คุณยังสามารถบันทึกหมายเหตุใน Study Session หรือบันทึกคะแนน Quiz/Diagnostic เพื่อให้ระบบสร้าง candidate ได้"
+          title="ยังไม่มีแผนทบทวน"
+          description="เมื่อมีข้อมูลการเรียนหรือผลแบบทดสอบ สามารถให้ระบบวิเคราะห์จุดอ่อนและสร้างแผนทบทวนเพิ่มเติมได้"
         />
       ) : (
         buckets

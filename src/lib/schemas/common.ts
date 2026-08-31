@@ -54,6 +54,7 @@ export const planItemStatusEnum = z.enum([
   "incomplete", // ทำไม่ครบ
   "needs_review", // ต้องทบทวน
   "recovery", // Recovery
+  "skipped", // ข้าม — ผู้ใช้ตัดสินใจไม่เรียนรายการนี้แล้ว
   "cancelled", // ยกเลิกตามแผนใหม่
 ]);
 export type PlanItemStatus = z.infer<typeof planItemStatusEnum>;

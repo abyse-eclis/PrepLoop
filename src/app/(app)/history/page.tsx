@@ -1,4 +1,3 @@
-import { subjectLabel } from "@/lib/subjects";
 import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { getItemsForDate } from "@/features/plans/data";
@@ -13,12 +12,11 @@ import { EmptyState } from "@/components/ui/misc";
 import { ItemRow } from "@/features/today/item-row";
 import { ResultForm } from "@/features/assessments/result-form";
 import { HistoryDatePicker } from "@/features/history/date-picker";
+import { SessionHistoryList } from "@/features/sessions/session-history";
 import {
   getSessionsForDate,
   groupSessionsByPlanItem,
 } from "@/features/history/data";
-import { activityLabel } from "@/lib/status";
-import type { StudySession } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +48,7 @@ export default async function HistoryPage({
     getSessionsForDate(workspace.id, date),
   ]);
   const planItems = items.map((row) => row.item);
-  const { sessionsByPlanItemId, unplanned } = groupSessionsByPlanItem(
+  const { sessionsByPlanItemId, matches, unplanned } = groupSessionsByPlanItem(
     sessions,
     planItems
   );
@@ -60,11 +58,19 @@ export default async function HistoryPage({
       ...row,
       sessions: matchedSessions,
       actualMinutes: matchedSessions.reduce(
-        (sum, s) => sum + (s.duration_minutes ?? 0),
+        (sum, session) => sum + (session.duration_minutes ?? 0),
         0
       ),
     };
   });
+  const sessionHistory = matches.map(({ session, planItem }) => ({
+    session,
+    item: planItem,
+  }));
+  const totalMinutes = sessions.reduce(
+    (sum, session) => sum + (session.duration_minutes ?? 0),
+    0
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -84,16 +90,29 @@ export default async function HistoryPage({
         คำนวณใหม่อัตโนมัติ · เวอร์ชันแผนเดิมยังคงแก้ไม่ได้
       </p>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Study Sessions ที่เกิดขึ้นจริง</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            {sessions.length} sessions · {totalMinutes} นาที ·{" "}
+            {unplanned.length} อิสระ
+          </p>
+          <SessionHistoryList sessions={sessionHistory} />
+        </CardContent>
+      </Card>
+
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted-foreground">
-          รายการตามแผนของวันนี้
+          รายการตามแผนของวันที่เลือก
         </h2>
         {rowsWithHistory.length === 0 ? (
           <EmptyState
             title="ไม่มีรายการตามแผนในวันนี้"
             description={
               sessions.length > 0
-                ? "ยังมีประวัติที่ทำจริงด้านล่าง"
+                ? "ยังมีประวัติที่ทำจริงด้านบน"
                 : "ยังสามารถบันทึกผลสอบแบบอิสระด้านล่างได้"
             }
           />
@@ -101,32 +120,6 @@ export default async function HistoryPage({
           rowsWithHistory.map((row) => (
             <ItemRow key={row.item.id} row={row} date={date} />
           ))
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              ประวัติที่ทำจริง
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {sessions.length} sessions ·{" "}
-              {sessions.reduce((sum, s) => sum + s.duration_minutes, 0)} นาที
-            </p>
-          </div>
-        </div>
-        {sessions.length === 0 ? (
-          <EmptyState
-            title="ยังไม่มีประวัติที่ทำจริงในวันนี้"
-            description="ประวัติที่ import หรือบันทึกเองจะแสดงที่ส่วนนี้"
-          />
-        ) : (
-          <div className="grid gap-2">
-            {sessions.map((session) => (
-              <HistorySessionCard key={session.id} session={session} />
-            ))}
-          </div>
         )}
       </section>
 
@@ -143,77 +136,5 @@ export default async function HistoryPage({
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function HistorySessionCard({ session }: { session: StudySession }) {
-  const lesson = session.actual_lesson_from
-    ? `${session.actual_lesson_from}${
-        session.actual_lesson_to &&
-        session.actual_lesson_to !== session.actual_lesson_from
-          ? `–${session.actual_lesson_to}`
-          : ""
-      }`
-    : null;
-  const score =
-    session.score != null && session.max_score != null
-      ? `${session.score}/${session.max_score}`
-      : null;
-  const answerCounts =
-    session.correct != null ||
-    session.incorrect != null ||
-    session.total_questions != null
-      ? `ถูก ${session.correct ?? "—"} / ผิด ${session.incorrect ?? "—"} / รวม ${
-          session.total_questions ?? "—"
-        }`
-      : null;
-
-  return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{subjectLabel(session.subject)}</span>
-              {session.course_code ? (
-                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
-                  {session.course_code}
-                </span>
-              ) : null}
-              {session.activity_type ? (
-                <span className="text-xs text-muted-foreground">
-                  {activityLabel(session.activity_type)}
-                </span>
-              ) : null}
-              {lesson ? (
-                <span className="text-xs text-muted-foreground">
-                  บท {lesson}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {session.start_time && session.end_time
-                ? `${session.start_time}–${session.end_time}`
-                : "ไม่ระบุช่วงเวลา"} · {session.duration_minutes} นาที
-            </p>
-            {score || answerCounts ? (
-              <p className="text-xs text-muted-foreground">
-                {score ? `คะแนน ${score}` : null}
-                {score && answerCounts ? " · " : null}
-                {answerCounts}
-              </p>
-            ) : null}
-            {session.note ? (
-              <p className="text-sm text-muted-foreground">{session.note}</p>
-            ) : null}
-          </div>
-          <div className="text-right text-xs text-muted-foreground">
-            {session.plan_item_id || session.source_activity_id || session.assessment_source_external_id
-              ? "เชื่อมกับแผนแล้ว"
-              : "อิสระ"}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { getActiveWorkspace } from "@/lib/auth/workspace";
-import { getStudyQueue } from "@/features/plans/data";
+import { getStudyQueue } from "@/features/today/data";
 import { todayInTimezone } from "@/lib/dates";
 import { TodayView } from "@/features/today/today-view";
 import { EmptyState } from "@/components/ui/misc";
