@@ -18,7 +18,7 @@ import {
 import type { ResolvedPlanItem } from "@/features/plans/data";
 import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
-import { Badge } from "@/components/ui/misc";
+import { Badge, Progress } from "@/components/ui/misc";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { setItemStatus } from "@/features/sessions/actions";
@@ -26,7 +26,7 @@ import { studyNow } from "@/features/today/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
 import { SessionHistoryPanel } from "@/features/sessions/session-history";
 import type { PlanItemStatus } from "@/lib/schemas/common";
-import { PRIORITY_WEIGHT } from "@/lib/calculations";
+import { PRIORITY_WEIGHT, timeCompletion } from "@/lib/calculations";
 import {
   deriveExecutionState,
   EXECUTION_STATE_CLASS,
@@ -35,7 +35,6 @@ import {
 } from "@/lib/study-execution";
 import type { PrerequisiteCheckResult } from "@/lib/execution-order";
 import { formatDateKeyThai } from "@/lib/dates";
-import { carryOverDayLabel } from "@/lib/carryover";
 import { getPlanItemResource } from "@/lib/plans/resource";
 
 const PRIORITY_LABEL: Record<string, string> = {
@@ -48,24 +47,18 @@ const ASSESSMENT_TYPES = new Set(["diagnostic", "quiz", "exercise", "mock"]);
 
 type ItemRowData = ResolvedPlanItem & { executionState?: ExecutionState };
 
-/** Carry-over context, present only when the row is shown on a later day. */
-export interface ItemRowCarryOver {
-  daysLate: number;
-  remainingMinutes: number;
-}
-
 export function ItemRow({
   row,
   date,
-  carryOver,
   orderIndex,
   prerequisiteStatus,
+  isHero = false,
 }: {
   row: ItemRowData;
   date: string;
-  carryOver?: ItemRowCarryOver;
   orderIndex?: number;
   prerequisiteStatus?: PrerequisiteCheckResult;
+  isHero?: boolean;
 }) {
   const { item } = row;
   const [openTime, setOpenTime] = useState(false);
@@ -96,8 +89,6 @@ export function ItemRow({
   const isSkipped = row.status === "skipped";
   const isBlocked = Boolean(prerequisiteStatus?.isBlocked);
 
-  // Skipping is the escape hatch for a shifted schedule: the item leaves the
-  // backlog and the stats denominator, and "เลิกข้าม" puts it straight back.
   const skipButton = (
     <Button
       size="sm"
@@ -107,15 +98,15 @@ export function ItemRow({
       title={
         isSkipped
           ? "เอากลับมาเรียนตามเดิม"
-          : "ข้ามรายการนี้ ไม่ต้องเรียนแล้ว (ไม่นับเป็นงานค้างและไม่ตัดคะแนน)"
+          : "ข้ามรายการนี้ ไม่ต้องเรียนแล้ว"
       }
     >
       {isSkipped ? (
-        <Undo2 className="h-3.5 w-3.5" />
+        <Undo2 className="h-3.5 w-3.5 mr-1" />
       ) : (
-        <SkipForward className="h-3.5 w-3.5" />
+        <SkipForward className="h-3.5 w-3.5 mr-1" />
       )}
-      {isSkipped ? "เลิกข้าม" : "ข้าม / ไม่เรียนแล้ว"}
+      {isSkipped ? "เลิกข้าม" : "ข้าม"}
     </Button>
   );
 
@@ -129,36 +120,59 @@ export function ItemRow({
       targetMinutes: item.target_minutes,
     });
 
-  const isStudying = row.status === "studying" || executionState === "in_progress";
+  const isStudying =
+    row.status === "studying" || executionState === "in_progress";
+  const displayOrder = orderIndex ?? item.order_index;
+  const timeProgress = timeCompletion(row.actualMinutes, item.target_minutes);
 
   return (
-    <Card className={isStudying ? "border-primary/60 shadow-sm ring-1 ring-primary/20" : ""}>
-      <CardContent className="pt-4">
+    <Card
+      className={`${
+        isHero
+          ? "border-primary/70 shadow-md ring-2 ring-primary/20 bg-card"
+          : isStudying
+            ? "border-primary/60 shadow-sm ring-1 ring-primary/20"
+            : ""
+      }`}
+    >
+      <CardContent className={isHero ? "pt-5 pb-5" : "pt-4"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              {orderIndex !== undefined ? (
-                <span className="font-semibold text-xs text-muted-foreground">
-                  ลำดับ {orderIndex} ·
+              {displayOrder !== undefined ? (
+                <span
+                  className={`font-bold tabular-nums text-xs px-2 py-0.5 rounded ${
+                    isHero
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  ลำดับที่ {displayOrder}
                 </span>
               ) : null}
-              <span className="font-medium">{subjectLabel(item.subject)}</span>
+
+              <span className="font-semibold text-base">
+                {subjectLabel(item.subject)}
+              </span>
+
               {item.course_code ? (
-                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
+                <span className="rounded bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                   {item.course_code}
                 </span>
               ) : null}
+
               <span className="text-xs text-muted-foreground">
                 {activityLabel(item.activity_type)}
               </span>
+
               <span className="text-xs text-muted-foreground">
-                · ความสำคัญ {PRIORITY_LABEL[item.priority]} (
+                · ความสำคัญ {PRIORITY_LABEL[item.priority] ?? item.priority} (
                 {PRIORITY_WEIGHT[item.priority]})
               </span>
             </div>
 
             {item.lesson_from ? (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-sm font-medium text-foreground">
                 คลิป {item.lesson_from}
                 {item.lesson_to && item.lesson_to !== item.lesson_from
                   ? `–${item.lesson_to}`
@@ -166,54 +180,46 @@ export function ItemRow({
               </p>
             ) : null}
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              planned date: {formatDateKeyThai(item.date, { buddhist: true })}
-              {item.date !== date
-                ? ` · เรียนจริงวันนี้: ${formatDateKeyThai(date, {
-                    buddhist: true,
-                  })}`
-                : ""}
-            </p>
-
-            {carryOver ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                ยกมาจากวันก่อน · {carryOverDayLabel(carryOver.daysLate)} ·
-                เวลาที่กรอกจะบันทึกเป็นวันนี้ (นับเป็นเรียนย้อนหลัง)
-              </p>
-            ) : null}
-
             {item.instructions ? (
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground break-words">
                 {item.instructions}
               </p>
             ) : null}
 
             {/* Prerequisite warning banner */}
             {isBlocked && prerequisiteStatus?.reason ? (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded">
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{prerequisiteStatus.reason}</span>
+              </div>
+            ) : null}
+
+            {/* Progress bar for Hero item */}
+            {isHero ? (
+              <div className="mt-3 max-w-md">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>ความคืบหน้า</span>
+                  <span className="font-medium">
+                    {row.actualMinutes} / {item.target_minutes} นาที (
+                    {timeProgress.percent}%)
+                  </span>
+                </div>
+                <Progress value={timeProgress.percent} />
               </div>
             ) : null}
           </div>
 
           <div className="text-right">
             <div className="flex flex-wrap justify-end gap-1.5">
-              {carryOver ? (
-                <Badge className="status-incomplete">
-                  {carryOverDayLabel(carryOver.daysLate)}
-                </Badge>
-              ) : null}
               <Badge className={EXECUTION_STATE_CLASS[executionState]}>
                 {EXECUTION_STATE_LABELS[executionState]}
               </Badge>
             </div>
-            <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-              {row.actualMinutes}/{item.target_minutes} นาที
-              {carryOver && carryOver.remainingMinutes > 0
-                ? ` · ค้างอีก ${carryOver.remainingMinutes} นาที`
-                : ""}
-            </div>
+            {!isHero ? (
+              <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                {row.actualMinutes}/{item.target_minutes} นาที
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -234,110 +240,107 @@ export function ItemRow({
           <p className="mt-2 text-sm text-destructive">{error}</p>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {/* "เรียนตอนนี้" (Study Now) button */}
           <Button
-            size="sm"
+            size={isHero ? "default" : "sm"}
             variant={isStudying ? "secondary" : "default"}
             disabled={pending || isBlocked || isSkipped}
             onClick={handleStudyNow}
             title={
               isBlocked
                 ? prerequisiteStatus?.reason
-                : "สลับมาเรียนรายการนี้ทันทีและบันทึกเวลาเรียนของรายการเดิม"
+                : "เริ่มเรียนรายการนี้และบันทึกเวลาเรียนทันที"
             }
           >
-            <Zap className="h-3.5 w-3.5" />
-            {isStudying ? "กำลังเรียนอยู่" : "เรียนตอนนี้"}
+            <Zap className="h-4 w-4 mr-1" />
+            {isStudying
+              ? "กำลังเรียนอยู่"
+              : isHero
+                ? "เรียนตอนนี้"
+                : "เรียนตอนนี้"}
           </Button>
 
           <Button
-            size="sm"
+            size={isHero ? "default" : "sm"}
             variant="secondary"
             disabled={pending || isBlocked}
             onClick={() => changeStatus("studying")}
             title="เริ่มเรียนหรือเรียนต่อ"
           >
-            <Play className="h-3.5 w-3.5" />
+            <Play className="h-4 w-4 mr-1" />
             {row.status === "not_started" ? "เริ่มเรียน" : "เรียนต่อ"}
           </Button>
 
           {row.status === "studying" ? (
             <Button
-              size="sm"
+              size={isHero ? "default" : "sm"}
               variant="outline"
               disabled={pending}
               onClick={() => changeStatus("paused")}
               title="พัก"
             >
-              <Pause className="h-3.5 w-3.5" />
+              <Pause className="h-4 w-4 mr-1" />
               พัก
             </Button>
           ) : null}
 
           <Button
-            size="sm"
+            size={isHero ? "default" : "sm"}
+            variant="outline"
             disabled={pending}
             onClick={() => changeStatus("completed")}
             title="ทำรายการนี้เสร็จแล้ว"
           >
-            <Check className="h-3.5 w-3.5" />
+            <Check className="h-4 w-4 mr-1" />
             เรียนเสร็จ
           </Button>
 
           <Button
-            size="sm"
+            size={isHero ? "default" : "sm"}
             variant="outline"
             onClick={() => setOpenTime((v) => !v)}
             title="เพิ่มเวลาเรียนจริง"
           >
-            <Clock className="h-3.5 w-3.5" />
+            <Clock className="h-4 w-4 mr-1" />
             เพิ่มเวลา
           </Button>
 
-          {carryOver || isSkipped ? skipButton : null}
+          {resource ? (
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({
+                variant: "outline",
+                size: isHero ? "default" : "sm",
+              })}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
+              {resource.label}
+            </a>
+          ) : null}
 
           <Button
-            size="sm"
+            size={isHero ? "default" : "sm"}
             variant="ghost"
             onClick={() => setOpenMore((v) => !v)}
             title="เปิดเมนูเพิ่มเติม"
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-            เพิ่มเติม
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
 
         {openMore ? (
           <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-            {carryOver || isSkipped ? null : skipButton}
+            {skipButton}
             {isAssessment ? (
               <Link href={`/assessments?item=${item.id}`}>
                 <Button size="sm" variant="outline">
-                  กรอกผล
+                  กรอกผลสอบ
                 </Button>
               </Link>
-            ) : null}
-            {resource ? (
-              <span className="flex flex-wrap items-center gap-2">
-                {resource.sourceName ? (
-                  <span className="text-xs text-muted-foreground">
-                    {resource.sourceName}
-                  </span>
-                ) : null}
-                <a
-                  href={resource.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${resource.label}สำหรับ ${subjectLabel(item.subject)}${resource.sourceName ? ` จาก ${resource.sourceName}` : ""}`}
-                  title={resource.tooltip}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                  {resource.label}
-                </a>
-              </span>
             ) : null}
             <Link href={`/plan?item=${item.stable_external_id}`}>
               <Button size="sm" variant="ghost">
@@ -356,7 +359,7 @@ export function ItemRow({
               variant="outline"
               onClick={() => setOpenHistory((v) => !v)}
             >
-              <History className="h-3.5 w-3.5" />
+              <History className="h-3.5 w-3.5 mr-1" />
               ประวัติการเรียน
             </Button>
           </div>
@@ -378,15 +381,12 @@ export function ItemRow({
                 }
               />
               <Detail label="กิจกรรม" value={activityLabel(item.activity_type)} />
+              <Detail label="เป้าหมาย" value={`${item.target_minutes} นาที`} />
               <Detail
-                label="planned date"
-                value={formatDateKeyThai(item.date, { buddhist: true })}
-              />
-              <Detail label="target" value={`${item.target_minutes} นาที`} />
-              <Detail
-                label="priority"
+                label="ความสำคัญ"
                 value={PRIORITY_LABEL[item.priority] ?? item.priority}
               />
+              <Detail label="ลำดับในแผน" value={`#${item.order_index}`} />
               <Detail label="stable id" value={item.stable_external_id} />
             </div>
             {item.instructions ? (

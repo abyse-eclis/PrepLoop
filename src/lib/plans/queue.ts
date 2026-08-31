@@ -30,7 +30,8 @@ export function classifyQueueState(input: {
   candidateItems: number;
 }): QueueState {
   if (input.totalItems === 0) return "empty";
-  if (input.completedItems + input.excludedItems >= input.totalItems) return "completed";
+  if (input.completedItems + input.excludedItems >= input.totalItems)
+    return "completed";
   return input.candidateItems > 0 ? "ready" : "inconsistent";
 }
 
@@ -41,7 +42,9 @@ export function selectQueueIds(
   limit = 8
 ): string[] {
   return items
-    .filter((item) => !item.scheduled && isQueueActionable(statuses.get(item.id)))
+    .filter(
+      (item) => !item.scheduled && isQueueActionable(statuses.get(item.id))
+    )
     .sort((a, b) => a.orderIndex - b.orderIndex || a.id.localeCompare(b.id))
     .slice(0, Math.max(0, limit))
     .map((item) => item.id);

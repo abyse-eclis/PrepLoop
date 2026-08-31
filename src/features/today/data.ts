@@ -1,45 +1,42 @@
 import { createServerSupabase } from "@/lib/supabase/server";
-import { addDays } from "@/lib/dates";
 import { timeCompletion } from "@/lib/calculations";
 import {
   deriveExecutionState,
   type ExecutionState,
 } from "@/lib/study-execution";
 import {
-  buildCarryOver,
-  CARRY_OVER_LOOKBACK_DAYS,
-  type CarryOverSummary,
-} from "@/lib/carryover";
-import { selectVersionForDate, versionIdsByDate } from "@/lib/plans/version";
-import {
+  getActivePlanVersion,
   getPlanDayTarget,
-  getPlanItemsForVersion,
-  getPlanItemsInRange,
   getPlanVersionSummaries,
-  resolvePlanItems,
+  PLAN_ITEM_COLUMNS,
+  STUDY_SESSION_COLUMNS,
   type ResolvedPlanItem,
 } from "@/features/plans/data";
 import { REVIEW_TASK_COLUMNS } from "@/features/reviews/data";
 import {
-  applyExecutionOrder,
   checkTaskPrerequisites,
-  normalizeOrderedIds,
   type PrerequisiteCheckResult,
   type PrerequisiteContext,
 } from "@/lib/execution-order";
+import {
+  classifyQueueState,
+  isQueueActionable,
+  isQueueCompleted,
+  isQueueExcluded,
+  type QueueState,
+} from "@/lib/plans/queue";
 import type {
   CustomStudyItem,
+  ItemStatusOverride,
+  PlanItem,
   PlanVersion,
   ReviewTask,
   StudySession,
 } from "@/types/db";
 import type { CustomStudyWithSessions } from "@/features/custom-study/custom-study-card";
+import type { PlanItemStatus } from "@/lib/schemas/common";
 
-/** Max carried-over items surfaced on Today (newest planned dates win). */
-const CARRY_OVER_LIMIT = 60;
-/** Raw rows fetched before filtering to the version that owns each date. */
-const CARRY_OVER_FETCH_LIMIT = CARRY_OVER_LIMIT * 4;
-const NEXT_LIMIT = 8;
+const UPCOMING_LIMIT = 7;
 
 export interface QueuePlanItem extends ResolvedPlanItem {
   executionState: ExecutionState;
@@ -48,146 +45,49 @@ export interface QueuePlanItem extends ResolvedPlanItem {
 
 export interface TodayStudyQueue {
   version: PlanVersion | null;
-  /** Unfinished work from earlier days, grouped by the day it came from. */
-  carryOver: CarryOverSummary<QueuePlanItem>;
-  /**
-   * Past items the user skipped. They are out of the backlog, but stay on the
-   * page so "ข้าม" can be undone without hunting through /history.
-   */
-  carryOverSkipped: QueuePlanItem[];
-  today: QueuePlanItem[];
-  supplementary: ReviewTask[];
-  next: QueuePlanItem[];
+  /** The first unfinished, actionable plan item in sequential order. */
+  current: QueuePlanItem | null;
+  /** Next actionable items in sequence to study ahead. */
+  upcoming: QueuePlanItem[];
+  /** Self-directed study items created for today. */
   customStudy: CustomStudyWithSessions[];
-  hasCustomOrder: boolean;
+  /** Due review tasks. */
+  supplementary: ReviewTask[];
+  queueState: QueueState;
+  queueError?: string;
   summary: {
     plannedTargetMinutes: number;
     actualMinutesToday: number;
-    remainingTargetMinutes: number;
-    overTargetMinutes: number;
-    todayCompletedItems: number;
-    todayTotalItems: number;
+    completedItems: number;
+    totalItems: number;
+    planProgressPercent: number;
     sessionCountToday: number;
-    /** Target minutes still owed by carried-over items. */
-    carryOverRemainingMinutes: number;
-    /** Minutes logged today against carried-over items ("เรียนย้อนหลัง"). */
-    carryOverMinutesToday: number;
-    /** Today's own target plus the carry-over debt. */
-    totalWorkloadMinutes: number;
-    /** Past items dropped from the backlog because they were skipped. */
-    carryOverSkippedItems: number;
   };
-}
-
-function withExecutionStateAndPrereqs(
-  items: ResolvedPlanItem[],
-  today: string,
-  prereqContext?: PrerequisiteContext
-): QueuePlanItem[] {
-  return items.map((row) => ({
-    ...row,
-    executionState: deriveExecutionState({
-      plannedDate: row.item.date,
-      today,
-      status: row.status,
-      sessions: row.sessions,
-      targetMinutes: row.item.target_minutes,
-    }),
-    prerequisiteStatus: prereqContext
-      ? checkTaskPrerequisites(
-          {
-            course_code: row.item.course_code,
-            lesson_from: row.item.lesson_from,
-            lesson_to: row.item.lesson_to,
-            assessment_source_id: row.item.assessment_source_id,
-            activity_type: row.item.activity_type,
-          },
-          prereqContext
-        )
-      : { isBlocked: false },
-  }));
-}
-
-function isComplete(row: QueuePlanItem): boolean {
-  return row.executionState.startsWith("completed_");
-}
-
-function minutesOnDate(sessions: StudySession[], date: string): number {
-  return sessions
-    .filter((s) => s.session_date === date)
-    .reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
-}
-
-/**
- * Plan items from earlier days that may still be owed, across every plan
- * version. Items whose date is no longer owned by their version (superseded by
- * a recovery plan) are dropped — that day belongs to the newer plan now.
- */
-async function loadPastPlanItems(
-  workspaceId: string,
-  versions: PlanVersion[],
-  date: string
-) {
-  const items = await getPlanItemsInRange(workspaceId, {
-    start: addDays(date, -CARRY_OVER_LOOKBACK_DAYS),
-    end: addDays(date, -1),
-    limit: CARRY_OVER_FETCH_LIMIT,
-    ascending: false,
-  });
-  if (items.length === 0) return [];
-
-  const ownerByDate = versionIdsByDate(
-    versions,
-    items.map((item) => item.date)
-  );
-
-  return items
-    .filter((item) => ownerByDate.get(item.date) === item.plan_version_id)
-    .sort(
-      (a, b) =>
-        a.date.localeCompare(b.date) || a.priority.localeCompare(b.priority)
-    )
-    .slice(0, CARRY_OVER_LIMIT);
 }
 
 export async function getStudyQueue(
   workspaceId: string,
-  date: string
+  date: string,
+  upcomingLimit = UPCOMING_LIMIT
 ): Promise<TodayStudyQueue> {
   const supabase = await createServerSupabase();
-  const versions = await getPlanVersionSummaries(workspaceId);
-  const version = selectVersionForDate(versions, date);
 
   const [
-    pastItems,
-    todayItems,
-    nextItems,
-    dayTarget,
-    reviews,
-    sessionsToday,
-    customOrderRes,
+    versions,
+    sessionsTodayRes,
+    reviewsRes,
     assessmentSourcesRes,
     courseLessonsRes,
     completedItemsRes,
     customStudyItemsRes,
   ] = await Promise.all([
-    loadPastPlanItems(workspaceId, versions, date),
-    version
-      ? getPlanItemsForVersion(workspaceId, version.id, {
-          start: date,
-          end: date,
-        })
-      : Promise.resolve([]),
-    version
-      ? getPlanItemsForVersion(workspaceId, version.id, {
-          start: addDays(date, 1),
-          limit: NEXT_LIMIT,
-          ascending: true,
-        })
-      : Promise.resolve([]),
-    version
-      ? getPlanDayTarget(workspaceId, version.id, date)
-      : Promise.resolve(null),
+    getPlanVersionSummaries(workspaceId),
+    supabase
+      .from("study_sessions")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("session_date", date)
+      .order("start_time", { ascending: true, nullsFirst: false }),
     supabase
       .from("review_tasks")
       .select(REVIEW_TASK_COLUMNS)
@@ -197,23 +97,14 @@ export async function getStudyQueue(
       .order("due_date", { ascending: true })
       .limit(12),
     supabase
-      .from("study_sessions")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .eq("session_date", date),
-    supabase
-      .from("daily_execution_orders")
-      .select("ordered_item_ids")
-      .eq("workspace_id", workspaceId)
-      .eq("execution_date", date)
-      .maybeSingle(),
-    supabase
       .from("assessment_sources")
       .select("id, external_id, required_completed_lessons")
       .eq("workspace_id", workspaceId),
     supabase
       .from("course_lessons")
-      .select("id, lesson_number, external_id, prerequisite_lesson_ids, courses!inner(code)")
+      .select(
+        "id, lesson_number, external_id, prerequisite_lesson_ids, courses!inner(code)"
+      )
       .eq("workspace_id", workspaceId),
     supabase
       .from("study_plan_items")
@@ -226,6 +117,59 @@ export async function getStudyQueue(
       .eq("study_date", date)
       .order("created_at", { ascending: true }),
   ]);
+
+  const activeVersion =
+    versions.find((v) => v.status === "active") ??
+    versions[0] ??
+    null;
+
+  const allSessionsToday = (sessionsTodayRes.data as StudySession[] | null) ?? [];
+  const actualMinutesToday = allSessionsToday.reduce(
+    (sum, s) => sum + Math.max(0, s.duration_minutes ?? 0),
+    0
+  );
+
+  // Match Custom Study items with their sessions
+  const customItems = (customStudyItemsRes.data as CustomStudyItem[] | null) ?? [];
+  const customStudyWithSessions: CustomStudyWithSessions[] = customItems.map((ci) => {
+    const matched = allSessionsToday.filter(
+      (s) => s.custom_study_item_id === ci.id
+    );
+    const actualMin = matched.reduce(
+      (sum, s) => sum + (s.duration_minutes ?? 0),
+      0
+    );
+    return {
+      item: ci,
+      sessions: matched,
+      actualMinutes: actualMin,
+    };
+  });
+
+  const reviews = (reviewsRes.data as ReviewTask[] | null) ?? [];
+
+  if (!activeVersion) {
+    return {
+      version: null,
+      current: null,
+      upcoming: [],
+      customStudy: customStudyWithSessions,
+      supplementary: reviews,
+      queueState: "empty",
+      summary: {
+        plannedTargetMinutes: 0,
+        actualMinutesToday,
+        completedItems: 0,
+        totalItems: 0,
+        planProgressPercent: 0,
+        sessionCountToday: allSessionsToday.length,
+      },
+    };
+  }
+
+  // Load day target for today
+  const dayTarget = await getPlanDayTarget(workspaceId, activeVersion.id, date);
+  const plannedTargetMinutes = dayTarget?.target_minutes ?? 0;
 
   // Build prerequisite context
   const completedLessonsByCourse = new Map<string, Set<string>>();
@@ -273,95 +217,151 @@ export async function getStudyQueue(
     lessonPrerequisites,
   };
 
-  const resolvedItems = await resolvePlanItems(workspaceId, [
-    ...todayItems,
-    ...pastItems,
-    ...nextItems,
-  ]);
-  const resolvedById = new Map(resolvedItems.map((row) => [row.item.id, row]));
-  const pick = (ids: { id: string }[]) =>
-    ids
-      .map((item) => resolvedById.get(item.id))
-      .filter((row): row is ResolvedPlanItem => Boolean(row));
+  // Fetch all plan items, overrides, and sessions for the active version
+  const [{ data: itemRows, error: itemError }, { data: overrideRows }, { data: sessionRows }] =
+    await Promise.all([
+      supabase
+        .from("study_plan_items")
+        .select(PLAN_ITEM_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .eq("plan_version_id", activeVersion.id)
+        .order("order_index", { ascending: true }),
+      supabase
+        .from("item_status_overrides")
+        .select("id, plan_item_id, status, actual_lesson_from, actual_lesson_to")
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("study_sessions")
+        .select(STUDY_SESSION_COLUMNS)
+        .eq("workspace_id", workspaceId),
+    ]);
 
-  const rawTodayQueue = withExecutionStateAndPrereqs(pick(todayItems), date, prereqContext);
-  const pastQueue = withExecutionStateAndPrereqs(pick(pastItems), date, prereqContext);
-  const nextQueue = withExecutionStateAndPrereqs(pick(nextItems), date, prereqContext).filter(
-    (row) => !isComplete(row)
+  if (itemError) {
+    return {
+      version: activeVersion,
+      current: null,
+      upcoming: [],
+      customStudy: customStudyWithSessions,
+      supplementary: reviews,
+      queueState: "inconsistent",
+      queueError: itemError.message,
+      summary: {
+        plannedTargetMinutes,
+        actualMinutesToday,
+        completedItems: 0,
+        totalItems: 0,
+        planProgressPercent: 0,
+        sessionCountToday: allSessionsToday.length,
+      },
+    };
+  }
+
+  const allItems = ((itemRows as unknown) as PlanItem[] | null) ?? [];
+  const overrides = (overrideRows as ItemStatusOverride[] | null) ?? [];
+  const allSessions = ((sessionRows as unknown) as StudySession[] | null) ?? [];
+
+  const overrideMap = new Map<string, ItemStatusOverride>(
+    overrides.map((o) => [o.plan_item_id, o])
   );
 
-  // Match Custom Study items with their sessions
-  const allSessionsToday = (sessionsToday.data as StudySession[] | null) ?? [];
-  const customItems = (customStudyItemsRes.data as CustomStudyItem[] | null) ?? [];
-  const customStudyWithSessions: CustomStudyWithSessions[] = customItems.map((ci) => {
-    const matched = allSessionsToday.filter(
-      (s) => s.custom_study_item_id === ci.id
-    );
-    const actualMin = matched.reduce(
+  const sessionMap = new Map<string, StudySession[]>();
+  for (const s of allSessions) {
+    if (s.plan_item_id) {
+      const arr = sessionMap.get(s.plan_item_id) ?? [];
+      arr.push(s);
+      sessionMap.set(s.plan_item_id, arr);
+    }
+  }
+
+  // Resolve each plan item with its status and actual minutes
+  const resolvedItems: ResolvedPlanItem[] = allItems.map((item) => {
+    const itemSessions = sessionMap.get(item.id) ?? [];
+    const actualMinutes = itemSessions.reduce(
       (sum, s) => sum + (s.duration_minutes ?? 0),
       0
     );
+    const override = overrideMap.get(item.id);
+    const status: PlanItemStatus =
+      (override?.status as PlanItemStatus) ??
+      (actualMinutes >= item.target_minutes ? "completed" : "not_started");
+
     return {
-      item: ci,
-      sessions: matched,
-      actualMinutes: actualMin,
+      item,
+      status,
+      sessions: itemSessions,
+      actualMinutes,
     };
   });
 
-  // Apply custom execution order if saved
-  const customOrderIds = normalizeOrderedIds(customOrderRes.data?.ordered_item_ids);
-  const hasCustomOrder = customOrderIds.length > 0;
-  const todayQueue = hasCustomOrder
-    ? applyExecutionOrder(rawTodayQueue, customOrderIds)
-    : rawTodayQueue;
+  // Calculate completion stats across the active plan
+  const totalItems = resolvedItems.length;
+  let completedItems = 0;
+  let excludedItems = 0;
+  const candidateItems: ResolvedPlanItem[] = [];
 
-  const carryOver = buildCarryOver(pastQueue, date, (row) => ({
-    plannedDate: row.item.date,
-    targetMinutes: row.item.target_minutes,
-    actualMinutes: row.actualMinutes,
-    executionState: row.executionState,
-  }));
-  const carryOverSkipped = pastQueue
-    .filter((row) => row.executionState === "skipped")
-    .sort((a, b) => b.item.date.localeCompare(a.item.date));
-  const carryOverMinutesToday = carryOver.entries.reduce(
-    (sum, entry) => sum + minutesOnDate(entry.row.sessions, date),
-    0
-  );
+  for (const row of resolvedItems) {
+    if (isQueueCompleted(row.status)) {
+      completedItems++;
+    } else if (isQueueExcluded(row.status)) {
+      excludedItems++;
+    } else {
+      candidateItems.push(row);
+    }
+  }
 
-  const actualMinutesToday = allSessionsToday.reduce(
-    (sum, s) => sum + (s.duration_minutes ?? 0),
-    0
-  );
-  const plannedTargetMinutes =
-    dayTarget?.target_minutes ??
-    todayItems.reduce((sum, item) => sum + item.target_minutes, 0);
-  const time = timeCompletion(actualMinutesToday, plannedTargetMinutes);
+  const queueState = classifyQueueState({
+    totalItems,
+    completedItems,
+    excludedItems,
+    candidateItems: candidateItems.length,
+  });
+
+  const planProgressPercent =
+    totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  // Build QueuePlanItems with executionState and prerequisites
+  function toQueueItem(row: ResolvedPlanItem): QueuePlanItem {
+    return {
+      ...row,
+      executionState: deriveExecutionState({
+        plannedDate: row.item.date,
+        today: date,
+        status: row.status,
+        sessions: row.sessions,
+        targetMinutes: row.item.target_minutes,
+      }),
+      prerequisiteStatus: checkTaskPrerequisites(
+        {
+          course_code: row.item.course_code,
+          lesson_from: row.item.lesson_from,
+          lesson_to: row.item.lesson_to,
+          assessment_source_id: row.item.assessment_source_id,
+          activity_type: row.item.activity_type,
+        },
+        prereqContext
+      ),
+    };
+  }
+
+  const currentItem = candidateItems[0] ? toQueueItem(candidateItems[0]) : null;
+  const upcomingItems = candidateItems
+    .slice(1, upcomingLimit + 1)
+    .map(toQueueItem);
 
   return {
-    version,
-    carryOver,
-    carryOverSkipped,
-    today: todayQueue,
-    supplementary: (reviews.data as ReviewTask[] | null) ?? [],
-    next: nextQueue,
+    version: activeVersion,
+    current: currentItem,
+    upcoming: upcomingItems,
     customStudy: customStudyWithSessions,
-    hasCustomOrder,
+    supplementary: reviews,
+    queueState,
     summary: {
       plannedTargetMinutes,
       actualMinutesToday,
-      remainingTargetMinutes: Math.max(
-        0,
-        plannedTargetMinutes - actualMinutesToday
-      ),
-      overTargetMinutes: time.overMinutes,
-      todayCompletedItems: todayQueue.filter(isComplete).length,
-      todayTotalItems: todayQueue.length,
+      completedItems,
+      totalItems,
+      planProgressPercent,
       sessionCountToday: allSessionsToday.length,
-      carryOverRemainingMinutes: carryOver.remainingMinutes,
-      carryOverMinutesToday,
-      totalWorkloadMinutes: plannedTargetMinutes + carryOver.remainingMinutes,
-      carryOverSkippedItems: carryOverSkipped.length,
     },
   };
 }
