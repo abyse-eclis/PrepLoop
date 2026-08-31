@@ -24,7 +24,7 @@ export interface TimePicker24hProps {
 export function TimePicker24h({
   value,
   onChange,
-  step = 5,
+  step = 1,
   disabled = false,
   invalid = false,
   className,
