@@ -25,6 +25,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, Textarea } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/components/ui/toast";
+import {
+  importTextSize,
+  importTooLargeMessage,
+  MAX_IMPORT_BYTES,
+  MAX_IMPORT_SIZE_LABEL,
+} from "@/lib/imports/size";
 
 function previewOf(type: ImportType, data: unknown): Record<string, number> {
   const d = data as Record<string, unknown>;
@@ -129,10 +135,23 @@ export function ImportPanel() {
     setResult(null);
     startTransition(async () => {
       let res: ImportResult;
-      if (type === "workspace_config") res = await importWorkspaceConfig(text);
-      else if (type === "learning_source") res = await importLearningSource(text);
-      else if (type === "execution_history") res = await importExecutionHistory(text);
-      else res = await importStudyPlan(text);
+      if (importTextSize(text) > MAX_IMPORT_BYTES) {
+        res = { ok: false, error: importTooLargeMessage() };
+      } else {
+        try {
+          if (type === "workspace_config") res = await importWorkspaceConfig(text);
+          else if (type === "learning_source") res = await importLearningSource(text);
+          else if (type === "execution_history") res = await importExecutionHistory(text);
+          else res = await importStudyPlan(text);
+        } catch {
+          // A rejected Server Action (including an envelope over the configured
+          // request limit) must remain a recoverable error on this page.
+          res = {
+            ok: false,
+            error: `ไม่สามารถส่งข้อมูลนำเข้าได้ กรุณาตรวจสอบว่าไฟล์มีขนาดไม่เกิน ${MAX_IMPORT_SIZE_LABEL} แล้วลองอีกครั้ง`,
+          };
+        }
+      }
       setResult(res);
       toast(
         res.ok
@@ -152,6 +171,14 @@ export function ImportPanel() {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) {
+      const message = importTooLargeMessage();
+      resetValidation();
+      setIssues([{ path: "(file)", message }]);
+      toast({ variant: "error", title: "นำเข้าไม่ได้", description: message });
+      e.target.value = "";
+      return;
+    }
     if (
       file.type &&
       file.type !== "application/json" &&
@@ -221,6 +248,9 @@ export function ImportPanel() {
             onChange={onFile}
             className="mt-1 text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:text-secondary-foreground"
           />
+          <p className="text-xs text-muted-foreground">
+            ขนาดไฟล์สูงสุด {MAX_IMPORT_SIZE_LABEL}
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">

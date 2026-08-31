@@ -394,4 +394,3 @@ function rangeBounds(mode: RangeMode, today: string, version: PlanVersion): Plan
   const end = addDays(start, 6);
   return { mode, label: `${start} → ${end}`, start, end };
 }
-
