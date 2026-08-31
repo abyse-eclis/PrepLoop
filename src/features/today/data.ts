@@ -20,6 +20,13 @@ import {
   type ResolvedPlanItem,
 } from "@/features/plans/data";
 import { REVIEW_TASK_COLUMNS } from "@/features/reviews/data";
+import {
+  applyExecutionOrder,
+  checkTaskPrerequisites,
+  normalizeOrderedIds,
+  type PrerequisiteCheckResult,
+  type PrerequisiteContext,
+} from "@/lib/execution-order";
 import type { PlanVersion, ReviewTask, StudySession } from "@/types/db";
 
 /** Max carried-over items surfaced on Today (newest planned dates win). */
@@ -30,6 +37,7 @@ const NEXT_LIMIT = 8;
 
 export interface QueuePlanItem extends ResolvedPlanItem {
   executionState: ExecutionState;
+  prerequisiteStatus?: PrerequisiteCheckResult;
 }
 
 export interface TodayStudyQueue {
@@ -44,6 +52,7 @@ export interface TodayStudyQueue {
   today: QueuePlanItem[];
   supplementary: ReviewTask[];
   next: QueuePlanItem[];
+  hasCustomOrder: boolean;
   summary: {
     plannedTargetMinutes: number;
     actualMinutesToday: number;
@@ -63,9 +72,10 @@ export interface TodayStudyQueue {
   };
 }
 
-function withExecutionState(
+function withExecutionStateAndPrereqs(
   items: ResolvedPlanItem[],
-  today: string
+  today: string,
+  prereqContext?: PrerequisiteContext
 ): QueuePlanItem[] {
   return items.map((row) => ({
     ...row,
@@ -76,6 +86,18 @@ function withExecutionState(
       sessions: row.sessions,
       targetMinutes: row.item.target_minutes,
     }),
+    prerequisiteStatus: prereqContext
+      ? checkTaskPrerequisites(
+          {
+            course_code: row.item.course_code,
+            lesson_from: row.item.lesson_from,
+            lesson_to: row.item.lesson_to,
+            assessment_source_id: row.item.assessment_source_id,
+            activity_type: row.item.activity_type,
+          },
+          prereqContext
+        )
+      : { isBlocked: false },
   }));
 }
 
@@ -129,39 +151,113 @@ export async function getStudyQueue(
   const versions = await getPlanVersionSummaries(workspaceId);
   const version = selectVersionForDate(versions, date);
 
-  const [pastItems, todayItems, nextItems, dayTarget, reviews, sessionsToday] =
-    await Promise.all([
-      loadPastPlanItems(workspaceId, versions, date),
-      version
-        ? getPlanItemsForVersion(workspaceId, version.id, {
-            start: date,
-            end: date,
-          })
-        : Promise.resolve([]),
-      version
-        ? getPlanItemsForVersion(workspaceId, version.id, {
-            start: addDays(date, 1),
-            limit: NEXT_LIMIT,
-            ascending: true,
-          })
-        : Promise.resolve([]),
-      version
-        ? getPlanDayTarget(workspaceId, version.id, date)
-        : Promise.resolve(null),
-      supabase
-        .from("review_tasks")
-        .select(REVIEW_TASK_COLUMNS)
-        .eq("workspace_id", workspaceId)
-        .eq("status", "pending")
-        .lte("due_date", date)
-        .order("due_date", { ascending: true })
-        .limit(12),
-      supabase
-        .from("study_sessions")
-        .select("id, duration_minutes")
-        .eq("workspace_id", workspaceId)
-        .eq("session_date", date),
-    ]);
+  const [
+    pastItems,
+    todayItems,
+    nextItems,
+    dayTarget,
+    reviews,
+    sessionsToday,
+    customOrderRes,
+    assessmentSourcesRes,
+    courseLessonsRes,
+    completedItemsRes,
+  ] = await Promise.all([
+    loadPastPlanItems(workspaceId, versions, date),
+    version
+      ? getPlanItemsForVersion(workspaceId, version.id, {
+          start: date,
+          end: date,
+        })
+      : Promise.resolve([]),
+    version
+      ? getPlanItemsForVersion(workspaceId, version.id, {
+          start: addDays(date, 1),
+          limit: NEXT_LIMIT,
+          ascending: true,
+        })
+      : Promise.resolve([]),
+    version
+      ? getPlanDayTarget(workspaceId, version.id, date)
+      : Promise.resolve(null),
+    supabase
+      .from("review_tasks")
+      .select(REVIEW_TASK_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending")
+      .lte("due_date", date)
+      .order("due_date", { ascending: true })
+      .limit(12),
+    supabase
+      .from("study_sessions")
+      .select("id, duration_minutes")
+      .eq("workspace_id", workspaceId)
+      .eq("session_date", date),
+    supabase
+      .from("daily_execution_orders")
+      .select("ordered_item_ids")
+      .eq("workspace_id", workspaceId)
+      .eq("execution_date", date)
+      .maybeSingle(),
+    supabase
+      .from("assessment_sources")
+      .select("id, external_id, required_completed_lessons")
+      .eq("workspace_id", workspaceId),
+    supabase
+      .from("course_lessons")
+      .select("id, lesson_number, external_id, prerequisite_lesson_ids, courses!inner(code)")
+      .eq("workspace_id", workspaceId),
+    supabase
+      .from("study_plan_items")
+      .select("course_code, lesson_to, item_status_overrides!inner(status)")
+      .eq("workspace_id", workspaceId),
+  ]);
+
+  // Build prerequisite context
+  const completedLessonsByCourse = new Map<string, Set<string>>();
+  for (const it of (completedItemsRes.data as Array<{
+    course_code: string | null;
+    lesson_to: string | null;
+    item_status_overrides: { status: string } | { status: string }[];
+  }> | null) ?? []) {
+    const ov = Array.isArray(it.item_status_overrides)
+      ? it.item_status_overrides[0]
+      : it.item_status_overrides;
+    if (ov?.status !== "completed" || !it.course_code || !it.lesson_to) continue;
+    const cur = completedLessonsByCourse.get(it.course_code) ?? new Set<string>();
+    cur.add(it.lesson_to);
+    completedLessonsByCourse.set(it.course_code, cur);
+  }
+
+  const assessmentRequiredLessons = new Map<string, string[]>();
+  for (const a of (assessmentSourcesRes.data as Array<{
+    id: string;
+    external_id: string;
+    required_completed_lessons: string[] | null;
+  }> | null) ?? []) {
+    if (a.required_completed_lessons && a.required_completed_lessons.length > 0) {
+      assessmentRequiredLessons.set(a.id, a.required_completed_lessons);
+      assessmentRequiredLessons.set(a.external_id, a.required_completed_lessons);
+    }
+  }
+
+  const lessonPrerequisites = new Map<string, string[]>();
+  for (const l of (courseLessonsRes.data as Array<{
+    lesson_number: string;
+    external_id: string;
+    prerequisite_lesson_ids: string[] | null;
+  }> | null) ?? []) {
+    if (l.prerequisite_lesson_ids && l.prerequisite_lesson_ids.length > 0) {
+      lessonPrerequisites.set(l.lesson_number, l.prerequisite_lesson_ids);
+      lessonPrerequisites.set(l.external_id, l.prerequisite_lesson_ids);
+    }
+  }
+
+  const prereqContext: PrerequisiteContext = {
+    completedLessonsByCourse,
+    assessmentRequiredLessons,
+    lessonPrerequisites,
+  };
 
   const resolvedItems = await resolvePlanItems(workspaceId, [
     ...todayItems,
@@ -174,11 +270,18 @@ export async function getStudyQueue(
       .map((item) => resolvedById.get(item.id))
       .filter((row): row is ResolvedPlanItem => Boolean(row));
 
-  const todayQueue = withExecutionState(pick(todayItems), date);
-  const pastQueue = withExecutionState(pick(pastItems), date);
-  const nextQueue = withExecutionState(pick(nextItems), date).filter(
+  const rawTodayQueue = withExecutionStateAndPrereqs(pick(todayItems), date, prereqContext);
+  const pastQueue = withExecutionStateAndPrereqs(pick(pastItems), date, prereqContext);
+  const nextQueue = withExecutionStateAndPrereqs(pick(nextItems), date, prereqContext).filter(
     (row) => !isComplete(row)
   );
+
+  // Apply custom execution order if saved
+  const customOrderIds = normalizeOrderedIds(customOrderRes.data?.ordered_item_ids);
+  const hasCustomOrder = customOrderIds.length > 0;
+  const todayQueue = hasCustomOrder
+    ? applyExecutionOrder(rawTodayQueue, customOrderIds)
+    : rawTodayQueue;
 
   const carryOver = buildCarryOver(pastQueue, date, (row) => ({
     plannedDate: row.item.date,
@@ -209,6 +312,7 @@ export async function getStudyQueue(
     today: todayQueue,
     supplementary: (reviews.data as ReviewTask[] | null) ?? [],
     next: nextQueue,
+    hasCustomOrder,
     summary: {
       plannedTargetMinutes,
       actualMinutesToday,

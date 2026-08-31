@@ -12,6 +12,7 @@ import { Stat, EmptyState, Progress, Badge } from "@/components/ui/misc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "./item-row";
+import { ReorderableQueue } from "./reorderable-queue";
 import { SkipDayButton } from "./skip-day-button";
 import { ReviewItem } from "@/features/reviews/review-item";
 
@@ -167,11 +168,12 @@ export function TodayView({
             skipped={queue.carryOverSkipped}
             date={date}
           />
-          <QueueSection
+          <ReorderableQueue
             title="วันนี้"
-            description="รายการที่ planned date ตรงกับวันนี้"
+            description="รายการที่ planned date ตรงกับวันนี้ สามารถจัดลำดับการเรียนและกดเรียนตอนนี้ได้ทันที"
             items={queue.today}
             date={date}
+            hasCustomOrder={queue.hasCustomOrder}
           />
           <ReviewSection reviews={queue.supplementary} />
           <QueueSection

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   Check,
   Clock,
   ExternalLink,
@@ -12,6 +13,7 @@ import {
   Play,
   SkipForward,
   Undo2,
+  Zap,
 } from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
 import { subjectLabel } from "@/lib/subjects";
@@ -20,6 +22,7 @@ import { Badge } from "@/components/ui/misc";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { setItemStatus } from "@/features/sessions/actions";
+import { studyNow } from "@/features/today/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
 import { SessionHistoryPanel } from "@/features/sessions/session-history";
 import type { PlanItemStatus } from "@/lib/schemas/common";
@@ -30,6 +33,7 @@ import {
   EXECUTION_STATE_LABELS,
   type ExecutionState,
 } from "@/lib/study-execution";
+import type { PrerequisiteCheckResult } from "@/lib/execution-order";
 import { formatDateKeyThai } from "@/lib/dates";
 import { carryOverDayLabel } from "@/lib/carryover";
 import { getPlanItemResource } from "@/lib/plans/resource";
@@ -54,10 +58,14 @@ export function ItemRow({
   row,
   date,
   carryOver,
+  orderIndex,
+  prerequisiteStatus,
 }: {
   row: ItemRowData;
   date: string;
   carryOver?: ItemRowCarryOver;
+  orderIndex?: number;
+  prerequisiteStatus?: PrerequisiteCheckResult;
 }) {
   const { item } = row;
   const [openTime, setOpenTime] = useState(false);
@@ -75,9 +83,19 @@ export function ItemRow({
     });
   }
 
+  function handleStudyNow() {
+    setError(null);
+    startTransition(async () => {
+      const res = await studyNow({ planItemId: item.id, date });
+      if (!res.ok) setError(res.error ?? "เกิดข้อผิดพลาดในการเริ่มเรียน");
+    });
+  }
+
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
   const resource = getPlanItemResource(item);
   const isSkipped = row.status === "skipped";
+  const isBlocked = Boolean(prerequisiteStatus?.isBlocked);
+
   // Skipping is the escape hatch for a shifted schedule: the item leaves the
   // backlog and the stats denominator, and "เลิกข้าม" puts it straight back.
   const skipButton = (
@@ -100,6 +118,7 @@ export function ItemRow({
       {isSkipped ? "เลิกข้าม" : "ข้าม / ไม่เรียนแล้ว"}
     </Button>
   );
+
   const executionState =
     row.executionState ??
     deriveExecutionState({
@@ -110,12 +129,19 @@ export function ItemRow({
       targetMinutes: item.target_minutes,
     });
 
+  const isStudying = row.status === "studying" || executionState === "in_progress";
+
   return (
-    <Card>
+    <Card className={isStudying ? "border-primary/60 shadow-sm ring-1 ring-primary/20" : ""}>
       <CardContent className="pt-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              {orderIndex !== undefined ? (
+                <span className="font-semibold text-xs text-muted-foreground">
+                  ลำดับ {orderIndex} ·
+                </span>
+              ) : null}
               <span className="font-medium">{subjectLabel(item.subject)}</span>
               {item.course_code ? (
                 <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
@@ -130,6 +156,7 @@ export function ItemRow({
                 {PRIORITY_WEIGHT[item.priority]})
               </span>
             </div>
+
             {item.lesson_from ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 คลิป {item.lesson_from}
@@ -138,6 +165,7 @@ export function ItemRow({
                   : ""}
               </p>
             ) : null}
+
             <p className="mt-1 text-xs text-muted-foreground">
               planned date: {formatDateKeyThai(item.date, { buddhist: true })}
               {item.date !== date
@@ -146,18 +174,29 @@ export function ItemRow({
                   })}`
                 : ""}
             </p>
+
             {carryOver ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 ยกมาจากวันก่อน · {carryOverDayLabel(carryOver.daysLate)} ·
                 เวลาที่กรอกจะบันทึกเป็นวันนี้ (นับเป็นเรียนย้อนหลัง)
               </p>
             ) : null}
+
             {item.instructions ? (
               <p className="mt-1 text-sm text-muted-foreground">
                 {item.instructions}
               </p>
             ) : null}
+
+            {/* Prerequisite warning banner */}
+            {isBlocked && prerequisiteStatus?.reason ? (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{prerequisiteStatus.reason}</span>
+              </div>
+            ) : null}
           </div>
+
           <div className="text-right">
             <div className="flex flex-wrap justify-end gap-1.5">
               {carryOver ? (
@@ -196,16 +235,33 @@ export function ItemRow({
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
+          {/* "เรียนตอนนี้" (Study Now) button */}
+          <Button
+            size="sm"
+            variant={isStudying ? "secondary" : "default"}
+            disabled={pending || isBlocked || isSkipped}
+            onClick={handleStudyNow}
+            title={
+              isBlocked
+                ? prerequisiteStatus?.reason
+                : "สลับมาเรียนรายการนี้ทันทีและบันทึกเวลาเรียนของรายการเดิม"
+            }
+          >
+            <Zap className="h-3.5 w-3.5" />
+            {isStudying ? "กำลังเรียนอยู่" : "เรียนตอนนี้"}
+          </Button>
+
           <Button
             size="sm"
             variant="secondary"
-            disabled={pending}
+            disabled={pending || isBlocked}
             onClick={() => changeStatus("studying")}
             title="เริ่มเรียนหรือเรียนต่อ"
           >
             <Play className="h-3.5 w-3.5" />
             {row.status === "not_started" ? "เริ่มเรียน" : "เรียนต่อ"}
           </Button>
+
           {row.status === "studying" ? (
             <Button
               size="sm"
@@ -218,6 +274,7 @@ export function ItemRow({
               พัก
             </Button>
           ) : null}
+
           <Button
             size="sm"
             disabled={pending}
@@ -227,6 +284,7 @@ export function ItemRow({
             <Check className="h-3.5 w-3.5" />
             เรียนเสร็จ
           </Button>
+
           <Button
             size="sm"
             variant="outline"
@@ -236,7 +294,9 @@ export function ItemRow({
             <Clock className="h-3.5 w-3.5" />
             เพิ่มเวลา
           </Button>
+
           {carryOver || isSkipped ? skipButton : null}
+
           <Button
             size="sm"
             variant="ghost"

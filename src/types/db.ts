@@ -207,3 +207,18 @@ export interface SourceFile {
   storage_path: string | null;
   size_bytes: number | null;
 }
+
+export interface OrderedTaskRef {
+  id: string;
+  type?: "plan_item" | "review_task" | string;
+}
+
+export interface DailyExecutionOrder {
+  id: string;
+  workspace_id: string;
+  execution_date: string;
+  ordered_item_ids: string[] | OrderedTaskRef[];
+  created_at: string;
+  updated_at: string;
+}
+
