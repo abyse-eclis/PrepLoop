@@ -75,8 +75,8 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([item], sessions);
-    expect(result[0].actualMinutes).toBe(70);
-    expect(result[0].status).toBe("studying");
+    expect(result[0]!.actualMinutes).toBe(70);
+    expect(result[0]!.status).toBe("studying");
   });
 
   it("Case B: Multiple sessions across different dates accumulate accurately", () => {
@@ -88,9 +88,9 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([item], sessions);
-    expect(result[0].actualMinutes).toBe(90);
-    expect(result[0].sessions).toHaveLength(3);
-    expect(result[0].status).toBe("studying");
+    expect(result[0]!.actualMinutes).toBe(90);
+    expect(result[0]!.sessions).toHaveLength(3);
+    expect(result[0]!.status).toBe("studying");
   });
 
   it("Case C: Inactivity over multiple days retains accumulated progress", () => {
@@ -101,8 +101,8 @@ describe("Plan Item Progress Aggregator", () => {
 
     // Checked on 2026-08-31 (11 days later)
     const result = resolvePlanItemsProgress([item], sessions);
-    expect(result[0].actualMinutes).toBe(50);
-    expect(result[0].status).toBe("studying");
+    expect(result[0]!.actualMinutes).toBe(50);
+    expect(result[0]!.status).toBe("studying");
   });
 
   it("Case D: Changing the current query date does not alter task-level accumulated progress", () => {
@@ -114,8 +114,8 @@ describe("Plan Item Progress Aggregator", () => {
     const resDay1 = resolvePlanItemsProgress([item], sessions);
     const resDay2 = resolvePlanItemsProgress([item], sessions);
 
-    expect(resDay1[0].actualMinutes).toBe(70);
-    expect(resDay2[0].actualMinutes).toBe(70);
+    expect(resDay1[0]!.actualMinutes).toBe(70);
+    expect(resDay2[0]!.actualMinutes).toBe(70);
   });
 
   it("Case E: Studying upcoming task ahead of time records progress separately and properly", () => {
@@ -127,8 +127,8 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([item1, item2], sessions);
-    expect(result[0].actualMinutes).toBe(70);
-    expect(result[1].actualMinutes).toBe(45);
+    expect(result[0]!.actualMinutes).toBe(70);
+    expect(result[1]!.actualMinutes).toBe(45);
   });
 
   it("Case F: Cross-version stable identity matching aggregates historical sessions with old plan_item_id", () => {
@@ -153,9 +153,9 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([activeItem], sessions, [], historicalRefs);
-    expect(result[0].actualMinutes).toBe(70);
-    expect(result[0].sessions).toHaveLength(3);
-    expect(result[0].status).toBe("studying");
+    expect(result[0]!.actualMinutes).toBe(70);
+    expect(result[0]!.sessions).toHaveLength(3);
+    expect(result[0]!.status).toBe("studying");
   });
 
   it("Cross-version override matching applies override from historical item", () => {
@@ -179,7 +179,7 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([activeItem], [], overrides, historicalRefs);
-    expect(result[0].status).toBe("studying");
+    expect(result[0]!.status).toBe("studying");
   });
 
   it("Completing target minutes automatically marks status as completed", () => {
@@ -189,7 +189,7 @@ describe("Plan Item Progress Aggregator", () => {
     ];
 
     const result = resolvePlanItemsProgress([item], sessions);
-    expect(result[0].actualMinutes).toBe(120);
-    expect(result[0].status).toBe("completed");
+    expect(result[0]!.actualMinutes).toBe(120);
+    expect(result[0]!.status).toBe("completed");
   });
 });

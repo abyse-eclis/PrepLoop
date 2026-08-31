@@ -132,17 +132,31 @@ export async function getStudyQueue(
 
   // Match Custom Study items with their sessions
   const customItems = (customStudyItemsRes.data as CustomStudyItem[] | null) ?? [];
+  let customSessionsAllTime: StudySession[] = [];
+  if (customItems.length > 0) {
+    const customItemIds = customItems.map((ci) => ci.id);
+    const { data: allCustomSessionsRes } = await supabase
+      .from("study_sessions")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("custom_study_item_id", customItemIds);
+    customSessionsAllTime = (allCustomSessionsRes as StudySession[] | null) ?? [];
+  }
+
   const customStudyWithSessions: CustomStudyWithSessions[] = customItems.map((ci) => {
-    const matched = allSessionsToday.filter(
+    const matchedToday = allSessionsToday.filter(
       (s) => s.custom_study_item_id === ci.id
     );
-    const actualMin = matched.reduce(
-      (sum, s) => sum + (s.duration_minutes ?? 0),
+    const matchedAll = customSessionsAllTime.filter(
+      (s) => s.custom_study_item_id === ci.id
+    );
+    const actualMin = matchedAll.reduce(
+      (sum, s) => sum + Math.max(0, s.duration_minutes ?? 0),
       0
     );
     return {
       item: ci,
-      sessions: matched,
+      sessions: matchedToday,
       actualMinutes: actualMin,
     };
   });
