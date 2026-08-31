@@ -5,7 +5,12 @@ import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { dateString, timeString } from "@/lib/schemas/common";
-import { validateIntervals } from "@/lib/dates";
+import {
+  validateIntervals,
+  timeInTimezone,
+  todayInTimezone,
+  DEFAULT_TIMEZONE,
+} from "@/lib/dates";
 import { displayCustomSubject } from "@/lib/constants/exam-categories";
 import type { ActionResult } from "@/features/sessions/actions";
 import type { CustomStudyItem, StudySession } from "@/types/db";
@@ -14,6 +19,10 @@ function revalidateAllStudyViews() {
   revalidatePath("/today");
   revalidatePath("/history");
   revalidatePath("/progress");
+  revalidatePath("/plan");
+  revalidatePath("/reviews");
+  revalidatePath("/courses");
+  revalidatePath("/assessments");
 }
 
 const customItemBaseSchema = {
@@ -161,6 +170,11 @@ export async function deleteCustomStudyItem(
 const setStatusSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["not_started", "studying", "paused", "completed"]),
+  startTime: timeString.optional(),
+  endTime: timeString.optional(),
+  durationMinutes: z.number().int().min(1).max(1440).optional(),
+  sessionDate: dateString.optional(),
+  note: z.string().max(500).optional(),
 });
 
 export async function setCustomStudyStatus(
@@ -173,6 +187,63 @@ export async function setCustomStudyStatus(
   if (!workspace) return { ok: false, error: "ไม่พบ workspace" };
 
   const supabase = await createServerSupabase();
+
+  const { data: itemData, error: fetchErr } = await supabase
+    .from("custom_study_items")
+    .select("*")
+    .eq("id", parsed.data.id)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+
+  if (fetchErr || !itemData) {
+    return { ok: false, error: "ไม่พบรายการหรือไม่มีสิทธิ์เข้าถึง" };
+  }
+  const item = itemData as CustomStudyItem;
+
+  // If transitioning from studying to paused/completed, record elapsed study session
+  if (
+    item.status === "studying" &&
+    (parsed.data.status === "paused" || parsed.data.status === "completed")
+  ) {
+    const tz = workspace.timezone || DEFAULT_TIMEZONE;
+    let duration = parsed.data.durationMinutes;
+    let startTime = parsed.data.startTime;
+    let endTime = parsed.data.endTime;
+    const sessionDate = parsed.data.sessionDate ?? todayInTimezone(tz);
+
+    if (duration === undefined) {
+      const startDate = new Date(item.updated_at);
+      const endDate = new Date();
+      const diffMs = endDate.getTime() - startDate.getTime();
+      duration = Math.floor(diffMs / 60000);
+      startTime = startTime ?? timeInTimezone(tz, startDate);
+      endTime = endTime ?? timeInTimezone(tz, endDate);
+    }
+
+    if (duration >= 1 && startTime && endTime) {
+      const effectiveSubject = displayCustomSubject(
+        item.subject,
+        item.custom_subject
+      );
+      await supabase.from("study_sessions").insert({
+        workspace_id: workspace.id,
+        custom_study_item_id: item.id,
+        plan_item_id: null,
+        exam_category: item.exam_category,
+        subject: effectiveSubject,
+        activity_type: "custom_study",
+        lesson_title: item.title,
+        lesson_url: item.url,
+        session_date: sessionDate,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: duration,
+        status: "completed",
+        note: parsed.data.note ?? null,
+      });
+    }
+  }
+
   const { error } = await supabase
     .from("custom_study_items")
     .update({

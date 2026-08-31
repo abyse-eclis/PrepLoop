@@ -204,6 +204,22 @@ export function dateKeyInTimezone(date: Date, timezone: string): string {
 }
 
 /**
+ * Format a Date (instant) into HH:MM (24h) in a timezone.
+ */
+export function timeInTimezone(
+  timezone: string = DEFAULT_TIMEZONE,
+  now: Date = new Date()
+): string {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return fmt.format(now);
+}
+
+/**
  * Format an ISO timestamp for display in a timezone.
  */
 export function formatDateTime(
