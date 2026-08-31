@@ -27,7 +27,13 @@ import {
   type PrerequisiteCheckResult,
   type PrerequisiteContext,
 } from "@/lib/execution-order";
-import type { PlanVersion, ReviewTask, StudySession } from "@/types/db";
+import type {
+  CustomStudyItem,
+  PlanVersion,
+  ReviewTask,
+  StudySession,
+} from "@/types/db";
+import type { CustomStudyWithSessions } from "@/features/custom-study/custom-study-card";
 
 /** Max carried-over items surfaced on Today (newest planned dates win). */
 const CARRY_OVER_LIMIT = 60;
@@ -52,6 +58,7 @@ export interface TodayStudyQueue {
   today: QueuePlanItem[];
   supplementary: ReviewTask[];
   next: QueuePlanItem[];
+  customStudy: CustomStudyWithSessions[];
   hasCustomOrder: boolean;
   summary: {
     plannedTargetMinutes: number;
@@ -162,6 +169,7 @@ export async function getStudyQueue(
     assessmentSourcesRes,
     courseLessonsRes,
     completedItemsRes,
+    customStudyItemsRes,
   ] = await Promise.all([
     loadPastPlanItems(workspaceId, versions, date),
     version
@@ -190,7 +198,7 @@ export async function getStudyQueue(
       .limit(12),
     supabase
       .from("study_sessions")
-      .select("id, duration_minutes")
+      .select("*")
       .eq("workspace_id", workspaceId)
       .eq("session_date", date),
     supabase
@@ -211,6 +219,12 @@ export async function getStudyQueue(
       .from("study_plan_items")
       .select("course_code, lesson_to, item_status_overrides!inner(status)")
       .eq("workspace_id", workspaceId),
+    supabase
+      .from("custom_study_items")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("study_date", date)
+      .order("created_at", { ascending: true }),
   ]);
 
   // Build prerequisite context
@@ -276,6 +290,24 @@ export async function getStudyQueue(
     (row) => !isComplete(row)
   );
 
+  // Match Custom Study items with their sessions
+  const allSessionsToday = (sessionsToday.data as StudySession[] | null) ?? [];
+  const customItems = (customStudyItemsRes.data as CustomStudyItem[] | null) ?? [];
+  const customStudyWithSessions: CustomStudyWithSessions[] = customItems.map((ci) => {
+    const matched = allSessionsToday.filter(
+      (s) => s.custom_study_item_id === ci.id
+    );
+    const actualMin = matched.reduce(
+      (sum, s) => sum + (s.duration_minutes ?? 0),
+      0
+    );
+    return {
+      item: ci,
+      sessions: matched,
+      actualMinutes: actualMin,
+    };
+  });
+
   // Apply custom execution order if saved
   const customOrderIds = normalizeOrderedIds(customOrderRes.data?.ordered_item_ids);
   const hasCustomOrder = customOrderIds.length > 0;
@@ -297,9 +329,10 @@ export async function getStudyQueue(
     0
   );
 
-  const actualMinutesToday = (
-    (sessionsToday.data as Array<{ duration_minutes: number }> | null) ?? []
-  ).reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
+  const actualMinutesToday = allSessionsToday.reduce(
+    (sum, s) => sum + (s.duration_minutes ?? 0),
+    0
+  );
   const plannedTargetMinutes =
     dayTarget?.target_minutes ??
     todayItems.reduce((sum, item) => sum + item.target_minutes, 0);
@@ -312,6 +345,7 @@ export async function getStudyQueue(
     today: todayQueue,
     supplementary: (reviews.data as ReviewTask[] | null) ?? [],
     next: nextQueue,
+    customStudy: customStudyWithSessions,
     hasCustomOrder,
     summary: {
       plannedTargetMinutes,
@@ -323,8 +357,7 @@ export async function getStudyQueue(
       overTargetMinutes: time.overMinutes,
       todayCompletedItems: todayQueue.filter(isComplete).length,
       todayTotalItems: todayQueue.length,
-      sessionCountToday:
-        (sessionsToday.data as Array<{ id: string }> | null)?.length ?? 0,
+      sessionCountToday: allSessionsToday.length,
       carryOverRemainingMinutes: carryOver.remainingMinutes,
       carryOverMinutesToday,
       totalWorkloadMinutes: plannedTargetMinutes + carryOver.remainingMinutes,

@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import type { Workspace, ReviewTask } from "@/types/db";
 import type { QueuePlanItem, TodayStudyQueue } from "@/features/today/data";
 import { timeCompletion } from "@/lib/calculations";
@@ -15,6 +19,8 @@ import { ItemRow } from "./item-row";
 import { ReorderableQueue } from "./reorderable-queue";
 import { SkipDayButton } from "./skip-day-button";
 import { ReviewItem } from "@/features/reviews/review-item";
+import { CustomStudyCard, type CustomStudyWithSessions } from "@/features/custom-study/custom-study-card";
+import { CustomStudyDialog } from "@/features/custom-study/custom-study-dialog";
 
 export function TodayView({
   workspace,
@@ -25,6 +31,7 @@ export function TodayView({
   date: string;
   queue: TodayStudyQueue;
 }) {
+  const [openAddCustom, setOpenAddCustom] = useState(false);
   const summary = queue.summary;
   const time = timeCompletion(
     summary.actualMinutesToday,
@@ -36,7 +43,8 @@ export function TodayView({
     queue.carryOverSkipped.length > 0 ||
     queue.today.length > 0 ||
     queue.supplementary.length > 0 ||
-    queue.next.length > 0;
+    queue.next.length > 0 ||
+    queue.customStudy.length > 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,15 +55,26 @@ export function TodayView({
             {formatDateKeyThai(date, { buddhist: true })} · {workspace.timezone}
           </p>
         </div>
-        <div className="text-right text-sm">
-          {queue.version ? (
-            <span className="text-muted-foreground">
-              แผน: <span className="text-foreground">{queue.version.name}</span> (v
-              {queue.version.version_number})
-            </span>
-          ) : (
-            <span className="text-muted-foreground">ยังไม่มีแผนที่ active</span>
-          )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            onClick={() => setOpenAddCustom(true)}
+            className="shadow-sm"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            เพิ่มการเรียนเอง
+          </Button>
+
+          <div className="text-right text-sm">
+            {queue.version ? (
+              <span className="text-muted-foreground">
+                แผน: <span className="text-foreground">{queue.version.name}</span> (v
+                {queue.version.version_number})
+              </span>
+            ) : (
+              <span className="text-muted-foreground">ยังไม่มีแผนที่ active</span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -105,18 +124,14 @@ export function TodayView({
           hint={queue.supplementary.length > 0 ? "เลือกทำได้ทันที" : "ไม่มีค้าง"}
         />
         <Stat
-          label="เรียนต่อได้"
-          value={queue.next.length}
-          hint="รายการจริงจากแผนถัดไป"
+          label="เรียนเสริมวันนี้"
+          value={queue.customStudy.length}
+          hint={queue.customStudy.length > 0 ? "เพิ่มเองสำหรับวันนี้" : "ไม่มี"}
         />
         <Stat
           label="Sessions วันนี้"
           value={summary.sessionCountToday}
           hint="นับจาก actual date"
-        />
-        <Stat
-          label="Nap เป้าหมาย"
-          value={`${workspace.nap_target_min}–${workspace.nap_target_max} นาที`}
         />
       </section>
 
@@ -152,17 +167,26 @@ export function TodayView({
           title="ยังไม่มีรายการเรียนสำหรับวันนี้"
           description={
             queue.version
-              ? "ยังไม่มีงานค้าง งานวันนี้ งานทบทวน หรือรายการเรียนต่อจากแผน"
-              : "ยังไม่มีแผนที่ active — นำเข้าและเปิดใช้แผน"
+              ? "ยังไม่มีงานค้าง งานวันนี้ งานทบทวน หรือรายการเรียนเสริม"
+              : "ยังไม่มีแผนที่ active — นำเข้าและเปิดใช้แผน หรือกดเพิ่มการเรียนเอง"
           }
           action={
-            <Link href="/imports">
-              <Button variant="outline">นำเข้าแผน</Button>
-            </Link>
+            <div className="flex gap-2">
+              <Button onClick={() => setOpenAddCustom(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                เพิ่มการเรียนเอง
+              </Button>
+              <Link href="/imports">
+                <Button variant="outline">นำเข้าแผน</Button>
+              </Link>
+            </div>
           }
         />
       ) : (
         <div className="flex flex-col gap-5">
+          {/* Custom Study Section (เรียนเสริม) */}
+          <CustomStudySection items={queue.customStudy} date={date} onAdd={() => setOpenAddCustom(true)} />
+
           <CarryOverSection
             carryOver={carryOver}
             skipped={queue.carryOverSkipped}
@@ -184,7 +208,50 @@ export function TodayView({
           />
         </div>
       )}
+
+      {/* Add Custom Study Dialog */}
+      <CustomStudyDialog
+        open={openAddCustom}
+        onOpenChange={setOpenAddCustom}
+        date={date}
+      />
     </div>
+  );
+}
+
+function CustomStudySection({
+  items,
+  date,
+  onAdd,
+}: {
+  items: CustomStudyWithSessions[];
+  date: string;
+  onAdd: () => void;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            การเรียนเสริมวันนี้ ({items.length})
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            รายการที่เพิ่มเองเฉพาะวันนี้ (คลิป/เว็บ/เอกสารภายนอก)
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          เพิ่มอีก
+        </Button>
+      </div>
+      <div className="flex flex-col gap-3">
+        {items.map((data) => (
+          <CustomStudyCard key={data.item.id} data={data} date={date} />
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { activityLabel } from "@/lib/status";
 import { formatDateKeyThai } from "@/lib/dates";
@@ -74,6 +75,11 @@ function SessionEditor({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  const isCustomStudy =
+    Boolean(session.custom_study_item_id) ||
+    session.activity_type === "custom_study" ||
+    (!item && Boolean(session.lesson_title || session.exam_category));
+
   function save() {
     setError(null);
     start(async () => {
@@ -98,7 +104,7 @@ function SessionEditor({
       session.end_time ?? "--:--"
     } · ${session.duration_minutes} นาที`;
     const ok = window.confirm(
-      `ลบประวัติการเรียนนี้?\n\n${label}\n\nการลบจะลบเฉพาะประวัติการเรียนจริง\nและไม่ลบรายการในแผน`
+      `ลบประวัติการเรียนนี้?\n\n${label}\n\nการลบจะลบเฉพาะประวัติการเรียนจริง\nและไม่ลบรายการในแผนหรือการเรียนเสริม`
     );
     if (!ok) return;
 
@@ -119,23 +125,57 @@ function SessionEditor({
         <div className="min-w-0">
           {item ? (
             <p className="truncate text-sm font-medium">{planItemTitle(item)}</p>
+          ) : isCustomStudy ? (
+            <div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-semibold px-1.5 py-0.5 text-[11px]">
+                  เรียนเสริม
+                </span>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {session.exam_category && session.exam_category !== "อื่น ๆ"
+                    ? `${session.exam_category} · ${session.subject ?? "ทั่วไป"}`
+                    : session.subject ?? "ทั่วไป"}
+                </span>
+              </div>
+              <p className="text-sm font-semibold mt-0.5">
+                {session.lesson_title || session.note || "การเรียนเสริม"}
+              </p>
+            </div>
           ) : (
             <p className="text-sm font-medium">{session.subject ?? "ทั่วไป"}</p>
           )}
-          <p className="text-xs text-muted-foreground">
+
+          <p className="text-xs text-muted-foreground mt-0.5">
             {formatDateKeyThai(session.session_date, { buddhist: true })} ·{" "}
             {session.start_time ?? "--:--"}–{session.end_time ?? "--:--"} ·{" "}
             {session.duration_minutes} นาที
           </p>
+
           {!compact && item ? (
             <p className="mt-1 text-xs text-muted-foreground">
               planned date: {formatDateKeyThai(item.date, { buddhist: true })}
             </p>
           ) : null}
-          {session.note ? (
+
+          {session.note && (!isCustomStudy || session.lesson_title) ? (
             <p className="mt-1 text-xs text-muted-foreground">{session.note}</p>
           ) : null}
+
+          {session.lesson_url ? (
+            <div className="mt-2">
+              <a
+                href={session.lesson_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                เปิดลิงก์
+              </a>
+            </div>
+          ) : null}
         </div>
+
         <div className="flex gap-1.5">
           <Button
             size="sm"
@@ -222,4 +262,3 @@ function planItemTitle(item: PlanItem): string {
     item.activity_type
   )}`;
 }
-
