@@ -28,7 +28,7 @@ async function ownedPlanItem(planItemId: string, workspaceId: string) {
   const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("study_plan_items")
-    .select("id, workspace_id, subject, date, lesson_from, lesson_to, target_minutes")
+    .select("id, workspace_id, subject, date, lesson_from, lesson_to, target_minutes, stable_external_id")
     .eq("id", planItemId)
     .maybeSingle();
   if (!data || data.workspace_id !== workspaceId) return null;
@@ -40,6 +40,7 @@ async function ownedPlanItem(planItemId: string, workspaceId: string) {
     lesson_from: string | null;
     lesson_to: string | null;
     target_minutes: number;
+    stable_external_id: string | null;
   };
 }
 
@@ -53,11 +54,23 @@ async function recomputePlanItemStatus(
   if (!item) return { ok: false, error: "ไม่พบรายการหรือไม่มีสิทธิ์เข้าถึง" };
 
   const supabase = await createServerSupabase();
+  let matchingItemIds = [planItemId];
+  if (item.stable_external_id) {
+    const { data: siblings } = await supabase
+      .from("study_plan_items")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("stable_external_id", item.stable_external_id);
+    if (siblings && siblings.length > 0) {
+      matchingItemIds = siblings.map((s) => s.id);
+    }
+  }
+
   const { data: sessions, error: sessionError } = await supabase
     .from("study_sessions")
     .select("duration_minutes")
     .eq("workspace_id", workspaceId)
-    .eq("plan_item_id", planItemId);
+    .in("plan_item_id", matchingItemIds);
   if (sessionError) return { ok: false, error: sessionError.message };
 
   const actualMinutes = (
@@ -141,6 +154,7 @@ export async function addTimeIntervals(
     return {
       workspace_id: workspace.id,
       plan_item_id: item.id,
+      source_activity_id: item.stable_external_id ?? null,
       subject: item.subject,
       session_date: parsed.data.sessionDate,
       start_time: iv.start,

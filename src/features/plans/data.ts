@@ -8,6 +8,7 @@ import type {
 } from "@/types/db";
 import type { PlanItemStatus } from "@/lib/schemas/common";
 import { selectVersionForDate } from "@/lib/plans/version";
+import { resolvePlanItemsProgress } from "@/lib/plans/progress";
 
 export const PLAN_VERSION_COLUMNS = [
   "id",
@@ -235,51 +236,46 @@ export async function resolvePlanItems(
   if (items.length === 0) return [];
 
   const supabase = await createServerSupabase();
-  const itemIds = items.map((i) => i.id);
 
   const [{ data: overrides }, { data: sessions }] = await Promise.all([
     supabase
       .from("item_status_overrides")
       .select(STATUS_OVERRIDE_COLUMNS)
-      .eq("workspace_id", workspaceId)
-      .in("plan_item_id", itemIds),
+      .eq("workspace_id", workspaceId),
     supabase
       .from("study_sessions")
       .select(STUDY_SESSION_COLUMNS)
       .eq("workspace_id", workspaceId)
-      .in("plan_item_id", itemIds)
       .order("session_date", { ascending: true })
       .order("start_time", { ascending: true }),
   ]);
 
-  const overrideMap = new Map<string, ItemStatusOverride>(
-    ((overrides as ItemStatusOverride[] | null) ?? []).map((o) => [
-      o.plan_item_id,
-      o,
-    ])
-  );
-  const sessionMap = new Map<string, StudySession[]>();
-  for (const s of (sessions as StudySession[] | null) ?? []) {
-    if (!s.plan_item_id) continue;
-    const arr = sessionMap.get(s.plan_item_id) ?? [];
-    arr.push(s);
-    sessionMap.set(s.plan_item_id, arr);
+  const allOverrides = (overrides as ItemStatusOverride[] | null) ?? [];
+  const allSessions = (sessions as StudySession[] | null) ?? [];
+
+  const referencedIds = [
+    ...new Set([
+      ...allSessions.map((s) => s.plan_item_id).filter(Boolean),
+      ...allOverrides.map((o) => o.plan_item_id).filter(Boolean),
+    ]),
+  ] as string[];
+
+  let historicalRows: Array<{ id: string; stable_external_id: string | null }> = [];
+  if (referencedIds.length > 0) {
+    const { data: hist } = await supabase
+      .from("study_plan_items")
+      .select("id, stable_external_id")
+      .eq("workspace_id", workspaceId)
+      .in("id", referencedIds);
+    historicalRows = (hist as Array<{ id: string; stable_external_id: string | null }> | null) ?? [];
   }
 
-  return items.map((item) => {
-    const itemSessions = sessionMap.get(item.id) ?? [];
-    const actualMinutes = itemSessions.reduce(
-      (sum, s) => sum + (s.duration_minutes ?? 0),
-      0
-    );
-    const override = overrideMap.get(item.id);
-    return {
-      item,
-      status: (override?.status as PlanItemStatus) ?? "not_started",
-      sessions: itemSessions,
-      actualMinutes,
-    };
-  });
+  return resolvePlanItemsProgress(
+    items,
+    allSessions,
+    allOverrides,
+    historicalRows
+  );
 }
 
 /**
