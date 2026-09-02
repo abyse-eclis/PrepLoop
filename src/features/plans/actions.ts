@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { addDays, todayInTimezone } from "@/lib/dates";
 import type { PlanVersion } from "@/types/db";
+import type { RepairSummary } from "@/features/plans/repair";
 
 export interface PlanActionResult {
   ok: boolean;
@@ -125,9 +126,38 @@ const repairSchema = z.object({
   versionId: z.string().uuid().optional(),
 });
 
+/**
+ * Preview missing learning resources and breakdown without mutating data.
+ */
+export async function previewPlanResourcesAction(
+  input?: z.infer<typeof repairSchema>
+): Promise<{ ok: boolean; summary?: RepairSummary; error?: string }> {
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace" };
+
+  const parsed = repairSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: "ข้อมูลไม่ถูกต้อง" };
+
+  const { previewPlanVersionResources } = await import("@/features/plans/repair");
+  const summary = await previewPlanVersionResources(
+    workspace.id,
+    parsed.data.versionId
+  );
+
+  if (!summary.ok) return { ok: false, error: summary.error ?? "ไม่สามารถดึงข้อมูลตรวจสอบได้" };
+
+  return {
+    ok: true,
+    summary,
+  };
+}
+
+/**
+ * Execute safe repair and backfill for missing resources.
+ */
 export async function repairPlanResourcesAction(
   input?: z.infer<typeof repairSchema>
-): Promise<PlanActionResult & { repairedCount?: number }> {
+): Promise<PlanActionResult & { summary?: RepairSummary }> {
   const workspace = await getActiveWorkspace();
   if (!workspace) return { ok: false, error: "ไม่พบ workspace" };
 
@@ -135,19 +165,18 @@ export async function repairPlanResourcesAction(
   if (!parsed.success) return { ok: false, error: "ข้อมูลไม่ถูกต้อง" };
 
   const { repairPlanVersionResources } = await import("@/features/plans/repair");
-  const result = await repairPlanVersionResources(
+  const summary = await repairPlanVersionResources(
     workspace.id,
     parsed.data.versionId
   );
 
-  if (!result.ok) return { ok: false, error: result.error ?? "ซ่อมแซมข้อมูลไม่สำเร็จ" };
+  if (!summary.ok) return { ok: false, error: summary.error ?? "ซ่อมแซมข้อมูลไม่สำเร็จ" };
 
   revalidatePath("/plan");
   revalidatePath("/today");
   return {
     ok: true,
-    repairedCount: result.repairedCount,
-    message: `ซ่อมแซมและกู้คืน resource สำเร็จ ${result.repairedCount} รายการ (จากทั้งหมด ${result.totalChecked} รายการที่ตรวจสอบ)`,
+    summary,
+    message: `ซ่อมแซมและกู้คืน resource สำเร็จ ${summary.repairedCount} รายการ (จากทั้งหมด ${summary.totalChecked} รายการที่ตรวจสอบ)`,
   };
 }
-

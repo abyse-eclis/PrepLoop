@@ -10,11 +10,12 @@ import { diffPlans, summarizeDiff } from "@/lib/plans/diff";
 import { PlanSchedule } from "@/features/plans/plan-schedule";
 import { getPlanItemResource } from "@/lib/plans/resource";
 import { activityLabel } from "@/lib/status";
-import { ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import {
   ActivateButton,
   RecoveryPanel,
 } from "@/features/plans/plan-actions-client";
+import { PlanResourceRepairPanel } from "@/features/plans/plan-repair-dialog";
 import {
   getPlanItemByExternalId,
   getPlanItemsForVersion,
@@ -209,6 +210,7 @@ export default async function PlanPage({
             ) : null}
 
             <RecoveryPanel />
+            <PlanResourceRepairPanel versionId={selected?.id} />
           </div>
         </div>
       )}
@@ -323,7 +325,10 @@ async function PlanScheduleSection({
                   </a>
                 </>
               ) : (
-                <span className="text-xs text-muted-foreground">-</span>
+                <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  ยังไม่ได้กำหนดแหล่งเรียน
+                </span>
               )}
             </div>
           </CardContent>

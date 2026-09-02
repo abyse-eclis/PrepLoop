@@ -57,6 +57,34 @@ describe("plan item resources", () => {
     });
   });
 
+  it("resolves canonical resources via metadata (e.g. English by Chris & KruP'ONE TGAT1)", () => {
+    const chrisItem = getPlanItemResource(
+      planItem({
+        subject: "A_LEVEL_ENGLISH",
+        metadata: { englishMode: "foundation_chris_core" },
+      })
+    );
+    expect(chrisItem).toEqual({
+      url: "https://youtu.be/zvvKelLMLtU",
+      label: "เปิดวิดีโอ",
+      sourceName: "English by Chris — คอร์สพื้นฐาน 20 ชั่วโมง",
+      tooltip: "เปิดวิดีโอในแท็บใหม่",
+    });
+
+    const tgatItem = getPlanItemResource(
+      planItem({
+        subject: "TGAT1",
+        metadata: { englishMode: "tgat1_exposure" },
+      })
+    );
+    expect(tgatItem).toEqual({
+      url: "https://www.youtube.com/watch?v=0nXxgts-RWc",
+      label: "เปิดวิดีโอ",
+      sourceName: "KruP’ONE OpenDurianTCAS",
+      tooltip: "เปิดวิดีโอในแท็บใหม่",
+    });
+  });
+
   it("labels YouTube URLs as 'เปิดวิดีโอ'", () => {
     const ytItem = planItem({
       subject: "A_LEVEL_ENGLISH",
@@ -95,7 +123,7 @@ describe("plan item resources", () => {
     });
   });
 
-  it("returns null for items with no resource URL or invalid URLs", () => {
+  it("returns null for items with no resource URL or invalid URLs and no canonical mapping", () => {
     expect(
       getPlanItemResource(
         planItem({ resource_url: "javascript:alert(1)", metadata: null })
