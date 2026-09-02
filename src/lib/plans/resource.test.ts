@@ -57,29 +57,52 @@ describe("plan item resources", () => {
     });
   });
 
-  it("labels generic websites as learning sources", () => {
-    expect(
-      getPlanItemResource(
-        planItem({
-          resource_url: "https://example.com/resource",
-          resource_label: "SmartMathPro",
-        })
-      )
-    ).toEqual({
-      url: "https://example.com/resource",
+  it("labels YouTube URLs as 'เปิดวิดีโอ'", () => {
+    const ytItem = planItem({
+      subject: "A_LEVEL_ENGLISH",
+      resource_url: "https://www.youtube.com/watch?v=GNGZrMu55Ko",
+      resource_label: "5 โครงสร้างประโยคพื้นฐาน",
+    });
+    const resource = getPlanItemResource(ytItem);
+    expect(resource).toEqual({
+      url: "https://www.youtube.com/watch?v=GNGZrMu55Ko",
+      label: "เปิดวิดีโอ",
+      sourceName: "5 โครงสร้างประโยคพื้นฐาน",
+      tooltip: "เปิดวิดีโอในแท็บใหม่",
+    });
+
+    const youtuBeItem = planItem({
+      subject: "TGAT1",
+      resource_url: "https://youtu.be/0nXxgts-RWc",
+      resource_label: "TGAT1 Vocab",
+    });
+    const ytBeResource = getPlanItemResource(youtuBeItem);
+    expect(ytBeResource?.label).toBe("เปิดวิดีโอ");
+  });
+
+  it("labels generic non-YouTube URLs as 'เปิดแหล่งเรียน'", () => {
+    const genericItem = planItem({
+      subject: "MATHEMATICS",
+      resource_url: "https://smartmathpro.com/lesson/1",
+      resource_label: "SmartMathPro",
+    });
+    const resource = getPlanItemResource(genericItem);
+    expect(resource).toEqual({
+      url: "https://smartmathpro.com/lesson/1",
       label: "เปิดแหล่งเรียน",
       sourceName: "SmartMathPro",
       tooltip: "เปิดแหล่งเรียนในแท็บใหม่",
     });
   });
 
-  it("does not return invalid or missing links", () => {
+  it("returns null for items with no resource URL or invalid URLs", () => {
     expect(
       getPlanItemResource(
         planItem({ resource_url: "javascript:alert(1)", metadata: null })
       )
     ).toBeNull();
-    expect(getPlanItemResource(planItem({}))).toBeNull();
+    expect(getPlanItemResource(planItem({ resource_url: null, metadata: null }))).toBeNull();
+    expect(getPlanItemResource(planItem({ resource_url: undefined, metadata: {} }))).toBeNull();
   });
 });
 

@@ -9,9 +9,11 @@ import {
   generateRecoveryPlan,
   type RecoveryContext,
 } from "@/lib/anthropic/recovery";
-import { getActivePlanVersion } from "@/features/plans/data";
+import { getActivePlanVersion, PLAN_ITEM_COLUMNS } from "@/features/plans/data";
 import { activatePlanVersion } from "@/features/plans/actions";
+import { preservePlanItemFields } from "@/lib/plans/item-preservation";
 import type { RecoveryPlan } from "@/lib/schemas/recovery";
+import type { PlanItem } from "@/types/db";
 
 export interface RecoveryPreview {
   ok: boolean;
@@ -56,7 +58,7 @@ export async function requestRecovery(): Promise<RecoveryPreview> {
   ] = await Promise.all([
     supabase
       .from("study_plan_items")
-      .select("stable_external_id, subject, course_code, activity_type, target_minutes, priority, date")
+      .select(PLAN_ITEM_COLUMNS)
       .eq("plan_version_id", activeVersion.id)
       .gte("date", today),
     supabase
@@ -109,21 +111,21 @@ export async function requestRecovery(): Promise<RecoveryPreview> {
       .map((c) => c.actual_lesson_to)
       .filter((c): c is string => Boolean(c)),
     notYetLearnedLessons: [],
-    pendingPlanItems: ((pendingItems as Array<{
-      stable_external_id: string;
-      subject: string;
-      course_code: string | null;
-      activity_type: string;
-      target_minutes: number;
-      priority: string;
-      date: string;
-    }> | null) ?? []).map((i) => ({
+    pendingPlanItems: ((pendingItems as PlanItem[] | null) ?? []).map((i) => ({
       stableExternalId: i.stable_external_id,
       subject: i.subject,
       courseCode: i.course_code,
+      lessonFrom: i.lesson_from,
+      lessonTo: i.lesson_to,
       activityType: i.activity_type,
+      assessmentSourceId: i.assessment_source_id,
       targetMinutes: i.target_minutes,
       priority: i.priority,
+      instructions: i.instructions,
+      resourceUrl: i.resource_url,
+      resourceLabel: i.resource_label,
+      reviewReferenceIds: i.review_reference_ids,
+      metadata: i.metadata,
       date: i.date,
     })),
     overdueReviews: ((overdueReviews as Array<{ subject: string | null; due_date: string; reason: string | null }> | null) ?? []).map(
@@ -238,6 +240,16 @@ export async function confirmRecovery(
   if (vErr) return { ok: false, error: vErr.message };
   const versionId = (versionRow as { id: string }).id;
 
+  const { data: parentItemRows } = await supabase
+    .from("study_plan_items")
+    .select(PLAN_ITEM_COLUMNS)
+    .eq("workspace_id", workspace.id)
+    .eq("plan_version_id", plan.parentPlanVersionId);
+  const parentItemsMap = new Map<string, PlanItem>(
+    ((parentItemRows as PlanItem[] | null) ?? []).map((p) => [p.stable_external_id, p])
+  );
+
+  let queuePosition = 1;
   for (const day of plan.days) {
     const { data: dayRow, error: dayErr } = await supabase
       .from("study_plan_days")
@@ -255,22 +267,34 @@ export async function confirmRecovery(
     const dayId = (dayRow as { id: string }).id;
 
     if (day.items.length > 0) {
-      const itemRows = day.items.map((item) => ({
-        workspace_id: workspace.id,
-        plan_version_id: versionId,
-        plan_day_id: dayId,
-        date: day.date,
-        stable_external_id: item.stableExternalId,
-        subject: item.subject,
-        course_code: item.courseCode ?? null,
-        lesson_from: item.lessonFrom ?? null,
-        lesson_to: item.lessonTo ?? null,
-        activity_type: item.activityType,
-        target_minutes: item.targetMinutes,
-        priority: item.priority,
-        instructions: item.instructions,
-        metadata: { recovery: true },
-      }));
+      const itemRows = day.items.map((item) => {
+        const sourceItem = parentItemsMap.get(item.stableExternalId) ?? null;
+        const preserved = preservePlanItemFields(item, sourceItem, {
+          extraMetadata: { recovery: true },
+        });
+        return {
+          workspace_id: workspace.id,
+          plan_version_id: versionId,
+          plan_day_id: dayId,
+          date: day.date,
+          stable_external_id: preserved.stable_external_id,
+          subject: preserved.subject,
+          course_code: preserved.course_code,
+          lesson_from: preserved.lesson_from,
+          lesson_to: preserved.lesson_to,
+          activity_type: preserved.activity_type,
+          assessment_source_id: preserved.assessment_source_id,
+          target_minutes: preserved.target_minutes,
+          priority: preserved.priority,
+          instructions: preserved.instructions,
+          resource_url: preserved.resource_url,
+          resource_label: preserved.resource_label,
+          review_reference_ids: preserved.review_reference_ids,
+          metadata: preserved.metadata,
+          order_index: queuePosition++,
+          scheduled_at: item.scheduledAt ?? null,
+        };
+      });
       const { error: itemErr } = await supabase
         .from("study_plan_items")
         .insert(itemRows);

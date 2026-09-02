@@ -46,6 +46,11 @@ export interface ExportPlanItemRow {
   status: string;
   executionState: string;
   instructions: string | null;
+  resourceUrl?: string | null;
+  resourceLabel?: string | null;
+  assessmentSourceId?: string | null;
+  reviewReferenceIds?: string[] | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ExportDayRow {

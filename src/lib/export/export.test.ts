@@ -192,6 +192,8 @@ function sampleExport(): StudyExport {
         status: "studying",
         executionState: "in_progress",
         instructions: null,
+        resourceUrl: "https://www.youtube.com/watch?v=GNGZrMu55Ko",
+        resourceLabel: "5 โครงสร้างประโยคพื้นฐาน",
       },
     ],
     assessments: [],
@@ -222,6 +224,14 @@ describe("export formats", () => {
     expect(file.contentType).toContain("text/csv");
   });
 
+  it("renders items sheet including resource_url and resource_label", () => {
+    const file = renderExport(sampleExport(), "csv-items");
+    const lines = file.body.split("\r\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("resource_url,resource_label");
+    expect(lines[1]).toContain("https://www.youtube.com/watch?v=GNGZrMu55Ko,5 โครงสร้างประโยคพื้นฐาน");
+  });
+
   it("keeps the catch-up flag and escapes notes in the sessions sheet", () => {
     const body = renderExport(sampleExport(), "csv-sessions").body;
     expect(body).toContain('"โน้ต, มีจุลภาค"');
@@ -235,6 +245,8 @@ describe("export formats", () => {
     expect(parsed.days).toHaveLength(1);
     expect(parsed.sessions).toHaveLength(1);
     expect(parsed.planItems).toHaveLength(1);
+    expect(parsed.planItems[0]?.resourceUrl).toBe("https://www.youtube.com/watch?v=GNGZrMu55Ko");
+    expect(parsed.planItems[0]?.resourceLabel).toBe("5 โครงสร้างประโยคพื้นฐาน");
     expect(parsed.totals.actualMinutes).toBe(100);
     expect(file.contentType).toContain("application/json");
   });

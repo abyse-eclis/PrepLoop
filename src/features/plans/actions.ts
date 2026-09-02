@@ -120,3 +120,34 @@ export async function archivePlanVersion(
   revalidatePath("/plan");
   return { ok: true, message: "เก็บถาวรฉบับร่างแล้ว" };
 }
+
+const repairSchema = z.object({
+  versionId: z.string().uuid().optional(),
+});
+
+export async function repairPlanResourcesAction(
+  input?: z.infer<typeof repairSchema>
+): Promise<PlanActionResult & { repairedCount?: number }> {
+  const workspace = await getActiveWorkspace();
+  if (!workspace) return { ok: false, error: "ไม่พบ workspace" };
+
+  const parsed = repairSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: "ข้อมูลไม่ถูกต้อง" };
+
+  const { repairPlanVersionResources } = await import("@/features/plans/repair");
+  const result = await repairPlanVersionResources(
+    workspace.id,
+    parsed.data.versionId
+  );
+
+  if (!result.ok) return { ok: false, error: result.error ?? "ซ่อมแซมข้อมูลไม่สำเร็จ" };
+
+  revalidatePath("/plan");
+  revalidatePath("/today");
+  return {
+    ok: true,
+    repairedCount: result.repairedCount,
+    message: `ซ่อมแซมและกู้คืน resource สำเร็จ ${result.repairedCount} รายการ (จากทั้งหมด ${result.totalChecked} รายการที่ตรวจสอบ)`,
+  };
+}
+

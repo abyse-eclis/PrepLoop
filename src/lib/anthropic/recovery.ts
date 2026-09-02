@@ -17,9 +17,17 @@ export interface RecoveryContext {
     stableExternalId: string;
     subject: string;
     courseCode?: string | null;
+    lessonFrom?: string | null;
+    lessonTo?: string | null;
     activityType: string;
+    assessmentSourceId?: string | null;
     targetMinutes: number;
     priority: string;
+    instructions?: string | null;
+    resourceUrl?: string | null;
+    resourceLabel?: string | null;
+    reviewReferenceIds?: string[] | null;
+    metadata?: Record<string, unknown> | null;
     date: string;
   }>;
   overdueReviews: Array<{ subject: string | null; dueDate: string; reason: string | null }>;
