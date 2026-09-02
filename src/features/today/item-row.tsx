@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  AlertTriangle,
   Check,
   Clock,
   ExternalLink,
@@ -320,7 +321,15 @@ export function ItemRow({
               <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
               {resource.label}
             </a>
-          ) : null}
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
+              title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ยังไม่ได้กำหนดแหล่งเรียน
+            </span>
+          )}
 
           <Button
             size={isHero ? "default" : "sm"}
