@@ -37,6 +37,7 @@ import {
 import type { PrerequisiteCheckResult } from "@/lib/execution-order";
 import { formatDateKeyThai } from "@/lib/dates";
 import { getPlanItemResource } from "@/lib/plans/resource";
+import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
 
 const PRIORITY_LABEL: Record<string, string> = {
   high: "สูง",
@@ -86,7 +87,8 @@ export function ItemRow({
   }
 
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
-  const resource = getPlanItemResource(item);
+  const supportsLearningResource = shouldShowLearningResource(item.subject);
+  const resource = supportsLearningResource ? getPlanItemResource(item) : null;
   const isSkipped = row.status === "skipped";
   const isBlocked = Boolean(prerequisiteStatus?.isBlocked);
 
@@ -307,29 +309,31 @@ export function ItemRow({
             เพิ่มเวลา
           </Button>
 
-          {resource ? (
-            <a
-              href={resource.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({
-                variant: "outline",
-                size: isHero ? "default" : "sm",
-              })}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
-              {resource.label}
-            </a>
-          ) : (
-            <span
-              className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
-              title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
-            >
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ยังไม่ได้กำหนดแหล่งเรียน
-            </span>
-          )}
+          {supportsLearningResource ? (
+            resource ? (
+              <a
+                href={resource.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({
+                  variant: "outline",
+                  size: isHero ? "default" : "sm",
+                })}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
+                {resource.label}
+              </a>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
+                title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                ยังไม่ได้กำหนดแหล่งเรียน
+              </span>
+            )
+          ) : null}
 
           <Button
             size={isHero ? "default" : "sm"}
