@@ -143,6 +143,11 @@ export async function buildStudyExport(
         targetMinutes: row.item.target_minutes,
       }),
       instructions: row.item.instructions,
+      resourceUrl: row.item.resource_url,
+      resourceLabel: row.item.resource_label,
+      assessmentSourceId: row.item.assessment_source_id,
+      reviewReferenceIds: row.item.review_reference_ids,
+      metadata: row.item.metadata,
     };
   });
 

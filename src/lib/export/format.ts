@@ -162,6 +162,8 @@ function itemsCsv(data: StudyExport): string {
       "execution_state",
       "instructions",
       "stable_external_id",
+      "resource_url",
+      "resource_label",
     ],
     data.planItems.map((i) => [
       i.plannedDate,
@@ -181,6 +183,8 @@ function itemsCsv(data: StudyExport): string {
       i.executionState,
       i.instructions,
       i.stableExternalId,
+      i.resourceUrl ?? "",
+      i.resourceLabel ?? "",
     ])
   );
 }

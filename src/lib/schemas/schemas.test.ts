@@ -176,6 +176,44 @@ describe("studyPlanSchema", () => {
     expect(r.ok).toBe(false);
     expect(r.issues[0]!.path).toBe("(root)");
   });
+
+  it("parses full study plan preserving resourceUrl, resourceLabel, and metadata", () => {
+    const fullPlan = {
+      schemaVersion: "1.0",
+      name: "TCAS70 Study Plan — v7.1 English by Chris",
+      startDate: "2026-09-01",
+      endDate: "2026-09-07",
+      generatedBy: "chatgpt",
+      days: [
+        {
+          date: "2026-09-02",
+          targetMinutes: 120,
+          items: [
+            {
+              stableExternalId: "2026-09-02-alevel-english",
+              subject: "A_LEVEL_ENGLISH",
+              activityType: "course",
+              targetMinutes: 60,
+              priority: "high",
+              instructions: "เรียน 5 โครงสร้างประโยคพื้นฐาน",
+              resourceUrl: "https://www.youtube.com/watch?v=GNGZrMu55Ko",
+              resourceLabel: "5 โครงสร้างประโยคพื้นฐาน",
+              metadata: { course: "English by Chris" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = validateWithSchema(fullPlan, studyPlanSchema);
+    expect(res.ok).toBe(true);
+    if (res.ok && res.data) {
+      const item = res.data.days[0]!.items[0]!;
+      expect(item.resourceUrl).toBe("https://www.youtube.com/watch?v=GNGZrMu55Ko");
+      expect(item.resourceLabel).toBe("5 โครงสร้างประโยคพื้นฐาน");
+      expect(item.metadata).toEqual({ course: "English by Chris" });
+    }
+  });
 });
 
 describe("recoveryPlanSchema", () => {

@@ -44,6 +44,7 @@ function toDiffShape(items: PlanItem[]) {
       resourceUrl: i.resource_url ?? undefined,
       resourceLabel: i.resource_label ?? undefined,
       reviewReferenceIds: i.review_reference_ids ?? [],
+      metadata: i.metadata ?? undefined,
     });
     byDate.set(i.date, arr);
   }
