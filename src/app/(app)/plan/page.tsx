@@ -9,6 +9,7 @@ import { PLAN_VERSION_STATUS_LABELS } from "@/lib/plans/immutable";
 import { diffPlans, summarizeDiff } from "@/lib/plans/diff";
 import { PlanSchedule } from "@/features/plans/plan-schedule";
 import { getPlanItemResource } from "@/lib/plans/resource";
+import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
 import { activityLabel } from "@/lib/status";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import {
@@ -246,9 +247,13 @@ async function PlanScheduleSection({
         )
       : Promise.resolve(null),
   ]);
-  const selectedItemResource = selectedItem
-    ? getPlanItemResource(selectedItem)
-    : null;
+  const supportsLearningResource = selectedItem
+    ? shouldShowLearningResource(selectedItem.subject)
+    : false;
+  const selectedItemResource =
+    selectedItem && supportsLearningResource
+      ? getPlanItemResource(selectedItem)
+      : null;
 
   const diff =
     selected.parent_version_id && parentItems.length > 0
@@ -300,37 +305,39 @@ async function PlanScheduleSection({
                 {selectedItem.instructions}
               </p>
             ) : null}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-xs text-muted-foreground">แหล่งเรียน</span>
-              {selectedItemResource ? (
-                <>
-                  {selectedItemResource.sourceName ? (
-                    <span className="text-xs text-muted-foreground">
-                      {selectedItemResource.sourceName}
-                    </span>
-                  ) : null}
-                  <a
-                    href={selectedItemResource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`${selectedItemResource.label}สำหรับ ${selectedItem.subject}${selectedItemResource.sourceName ? ` จาก ${selectedItemResource.sourceName}` : ""}`}
-                    title={selectedItemResource.tooltip}
-                    className={buttonVariants({
-                      variant: "outline",
-                      size: "sm",
-                    })}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                    {selectedItemResource.label}
-                  </a>
-                </>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-                  <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  ยังไม่ได้กำหนดแหล่งเรียน
-                </span>
-              )}
-            </div>
+            {shouldShowLearningResource(selectedItem.subject) ? (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs text-muted-foreground">แหล่งเรียน</span>
+                {selectedItemResource ? (
+                  <>
+                    {selectedItemResource.sourceName ? (
+                      <span className="text-xs text-muted-foreground">
+                        {selectedItemResource.sourceName}
+                      </span>
+                    ) : null}
+                    <a
+                      href={selectedItemResource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${selectedItemResource.label}สำหรับ ${selectedItem.subject}${selectedItemResource.sourceName ? ` จาก ${selectedItemResource.sourceName}` : ""}`}
+                      title={selectedItemResource.tooltip}
+                      className={buttonVariants({
+                        variant: "outline",
+                        size: "sm",
+                      })}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      {selectedItemResource.label}
+                    </a>
+                  </>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    ยังไม่ได้กำหนดแหล่งเรียน
+                  </span>
+                )}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

@@ -7,6 +7,10 @@ import {
 } from "@/lib/plans/item-preservation";
 import { resolveCanonicalResource } from "@/lib/plans/canonical-resources";
 import { isValidResourceUrl } from "@/lib/plans/resource";
+import {
+  RESOURCE_ENABLED_SUBJECTS,
+  shouldShowLearningResource,
+} from "@/lib/plans/resource-policy";
 import type { PlanItem } from "@/types/db";
 
 export type RepairStatus =
@@ -72,11 +76,12 @@ export async function scanPlanItemsForRepair(
     }
   }
 
-  // 2. Query target items needing repair (resource_url is null)
+  // 2. Query target items needing repair (resource_url is null and subject is resource-enabled)
   let targetQuery = supabase
     .from("study_plan_items")
     .select(PLAN_ITEM_COLUMNS)
     .eq("workspace_id", workspaceId)
+    .in("subject", [...RESOURCE_ENABLED_SUBJECTS])
     .is("resource_url", null);
 
   if (targetVersionId) {
@@ -88,7 +93,8 @@ export async function scanPlanItemsForRepair(
     return { ok: false, targets: [], donorMap: new Map(), classifiedDetails: [], error: targetErr.message };
   }
 
-  const targets = (targetRows as unknown as PlanItem[] | null) ?? [];
+  const rawTargets = (targetRows as unknown as PlanItem[] | null) ?? [];
+  const targets = rawTargets.filter((t) => shouldShowLearningResource(t.subject));
   const classifiedDetails: RepairItemDetail[] = [];
 
   for (const target of targets) {

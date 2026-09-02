@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { resolveResourceFields, mergeItemMetadata, isSameLearningContent } from "@/lib/plans/item-preservation";
 import { resolveCanonicalResource } from "@/lib/plans/canonical-resources";
+import {
+  RESOURCE_ENABLED_SUBJECTS,
+  shouldShowLearningResource,
+} from "@/lib/plans/resource-policy";
 import type { PlanItem } from "@/types/db";
 
 describe("plan resource repair logic", () => {
@@ -238,5 +242,173 @@ describe("plan resource repair logic", () => {
     const { resourceUrl, resourceLabel } = resolveResourceFields(targetWithOwnResource, donor);
     expect(resourceUrl).toBe("https://www.youtube.com/watch?v=new");
     expect(resourceLabel).toBe("New Video");
+  });
+
+  it("filters scan targets to ONLY include A_LEVEL_ENGLISH and TGAT1 (excludes Math, Physics, TPAT3, TGAT2, TGAT3)", () => {
+    const rawItems: PlanItem[] = [
+      {
+        id: "item-math",
+        workspace_id: "ws-1",
+        plan_version_id: "v-21",
+        plan_day_id: "day-1",
+        date: "2026-09-02",
+        order_index: 1,
+        scheduled_at: null,
+        stable_external_id: "ext-math",
+        subject: "MATHEMATICS",
+        course_code: "K001",
+        lesson_from: null,
+        lesson_to: null,
+        activity_type: "course",
+        assessment_source_id: null,
+        target_minutes: 60,
+        priority: "high",
+        instructions: "Math lesson",
+        resource_url: null,
+        resource_label: null,
+        review_reference_ids: [],
+        metadata: null,
+        created_at: "2026-09-02T00:00:00Z",
+      },
+      {
+        id: "item-phys",
+        workspace_id: "ws-1",
+        plan_version_id: "v-21",
+        plan_day_id: "day-1",
+        date: "2026-09-02",
+        order_index: 2,
+        scheduled_at: null,
+        stable_external_id: "ext-phys",
+        subject: "PHYSICS",
+        course_code: "X003",
+        lesson_from: null,
+        lesson_to: null,
+        activity_type: "course",
+        assessment_source_id: null,
+        target_minutes: 60,
+        priority: "high",
+        instructions: "Physics lesson",
+        resource_url: null,
+        resource_label: null,
+        review_reference_ids: [],
+        metadata: null,
+        created_at: "2026-09-02T00:00:00Z",
+      },
+      {
+        id: "item-tpat3",
+        workspace_id: "ws-1",
+        plan_version_id: "v-21",
+        plan_day_id: "day-1",
+        date: "2026-09-02",
+        order_index: 3,
+        scheduled_at: null,
+        stable_external_id: "ext-tpat3",
+        subject: "TPAT3",
+        course_code: "R021",
+        lesson_from: null,
+        lesson_to: null,
+        activity_type: "course",
+        assessment_source_id: null,
+        target_minutes: 60,
+        priority: "high",
+        instructions: "TPAT3 lesson",
+        resource_url: null,
+        resource_label: null,
+        review_reference_ids: [],
+        metadata: null,
+        created_at: "2026-09-02T00:00:00Z",
+      },
+      {
+        id: "item-eng",
+        workspace_id: "ws-1",
+        plan_version_id: "v-21",
+        plan_day_id: "day-1",
+        date: "2026-09-02",
+        order_index: 4,
+        scheduled_at: null,
+        stable_external_id: "ext-eng",
+        subject: "A_LEVEL_ENGLISH",
+        course_code: null,
+        lesson_from: null,
+        lesson_to: null,
+        activity_type: "course",
+        assessment_source_id: null,
+        target_minutes: 60,
+        priority: "high",
+        instructions: "English lesson",
+        resource_url: null,
+        resource_label: null,
+        review_reference_ids: [],
+        metadata: null,
+        created_at: "2026-09-02T00:00:00Z",
+      },
+      {
+        id: "item-tgat1",
+        workspace_id: "ws-1",
+        plan_version_id: "v-21",
+        plan_day_id: "day-1",
+        date: "2026-09-02",
+        order_index: 5,
+        scheduled_at: null,
+        stable_external_id: "ext-tgat1",
+        subject: "TGAT1",
+        course_code: null,
+        lesson_from: null,
+        lesson_to: null,
+        activity_type: "review",
+        assessment_source_id: null,
+        target_minutes: 15,
+        priority: "medium",
+        instructions: "TGAT1 lesson",
+        resource_url: null,
+        resource_label: null,
+        review_reference_ids: [],
+        metadata: null,
+        created_at: "2026-09-02T00:00:00Z",
+      },
+    ];
+
+    const repairTargets = rawItems.filter((i) => shouldShowLearningResource(i.subject));
+    expect(repairTargets.map((t) => t.subject)).toEqual([
+      "A_LEVEL_ENGLISH",
+      "TGAT1",
+    ]);
+  });
+
+  it("preserves existing resource_url on non-English items during preservation resolution", () => {
+    const mathItemWithResource: PlanItem = {
+      id: "item-math-1",
+      workspace_id: "ws-1",
+      plan_version_id: "v-20",
+      plan_day_id: "day-1",
+      date: "2026-09-02",
+      order_index: 1,
+      scheduled_at: null,
+      stable_external_id: "ext-math-k001",
+      subject: "MATHEMATICS",
+      course_code: "K001",
+      lesson_from: "01",
+      lesson_to: "02",
+      activity_type: "course",
+      assessment_source_id: null,
+      target_minutes: 60,
+      priority: "high",
+      instructions: "Math K001",
+      resource_url: "https://smartmathpro.com/lesson/1",
+      resource_label: "SmartMathPro",
+      review_reference_ids: [],
+      metadata: null,
+      created_at: "2026-09-02T00:00:00Z",
+    };
+
+    const targetItem: PlanItem = {
+      ...mathItemWithResource,
+      id: "item-math-2",
+      plan_version_id: "v-21",
+    };
+
+    const { resourceUrl, resourceLabel } = resolveResourceFields(targetItem, mathItemWithResource);
+    expect(resourceUrl).toBe("https://smartmathpro.com/lesson/1");
+    expect(resourceLabel).toBe("SmartMathPro");
   });
 });
