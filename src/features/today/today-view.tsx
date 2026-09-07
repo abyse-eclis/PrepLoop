@@ -10,7 +10,7 @@ import { formatDateKeyThai } from "@/lib/dates";
 import { Stat, EmptyState, Progress } from "@/components/ui/misc";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ItemRow } from "./item-row";
+import { StudyItemCard } from "./study-item-card";
 import { ReviewItem } from "@/features/reviews/review-item";
 import {
   CustomStudyCard,
@@ -48,7 +48,7 @@ export function TodayView({
     queue.supplementary.length > 0;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div data-wide-page className="flex flex-col gap-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">วันนี้ · ลำดับการเรียน</h1>
@@ -183,7 +183,7 @@ export function TodayView({
                   </p>
                 </div>
               </div>
-              <ItemRow
+              <StudyItemCard
                 row={queue.current}
                 date={date}
                 orderIndex={queue.current.item.order_index}
@@ -218,9 +218,9 @@ export function TodayView({
                   ลำดับถัดไปในแผนการเรียน สามารถกดเรียนล่วงหน้าได้ทันที
                 </p>
               </div>
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-8">
                 {queue.upcoming.map((row) => (
-                  <ItemRow
+                  <StudyItemCard
                     key={row.item.id}
                     row={row}
                     date={date}

@@ -14,7 +14,7 @@ import { planItemTopic, lessonRangeText } from "@/lib/plans/topic";
 import { subjectLabel } from "@/lib/subjects";
 import { getResourcesByPlanItem } from "@/features/resources/data";
 import { resolveItemResources } from "@/lib/resources/resolve";
-import { ResourceColumns } from "@/features/resources/resource-columns";
+import { ResourceGrid } from "@/features/resources/resource-grid";
 import { activityLabel } from "@/lib/status";
 import { AlertTriangle } from "lucide-react";
 import {
@@ -336,7 +336,7 @@ async function PlanScheduleSection({
                     ยังไม่ได้กำหนดแหล่งเรียน
                   </p>
                 ) : null}
-                <ResourceColumns
+                <ResourceGrid
                   planItemId={selectedItem.id}
                   resources={selectedItemResources}
                   today={today}

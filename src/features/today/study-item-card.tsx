@@ -7,9 +7,7 @@ import {
   AlertTriangle,
   Check,
   Clock,
-  ExternalLink,
   History,
-  Library,
   MoreHorizontal,
   Pause,
   Play,
@@ -21,8 +19,7 @@ import type { ResolvedPlanItem } from "@/features/plans/data";
 import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
 import { Badge, Progress } from "@/components/ui/misc";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { setItemStatus } from "@/features/sessions/actions";
 import { studyNow } from "@/features/today/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
@@ -36,13 +33,10 @@ import {
   type ExecutionState,
 } from "@/lib/study-execution";
 import type { PrerequisiteCheckResult } from "@/lib/execution-order";
-import { formatDateKeyThai } from "@/lib/dates";
-import { getPlanItemResource } from "@/lib/plans/resource";
-import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
 import { lessonRangeText, planItemTopic, topicIsSubject } from "@/lib/plans/topic";
-import { groupResourcesByTier } from "@/lib/resources/group";
+import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
 import type { StudyResource } from "@/lib/resources/types";
-import { ResourceColumns } from "@/features/resources/resource-columns";
+import { ResourceGrid } from "@/features/resources/resource-grid";
 
 const PRIORITY_LABEL: Record<string, string> = {
   high: "สูง",
@@ -52,30 +46,40 @@ const PRIORITY_LABEL: Record<string, string> = {
 
 const ASSESSMENT_TYPES = new Set(["diagnostic", "quiz", "exercise", "mock"]);
 
-type ItemRowData = ResolvedPlanItem & {
+export type StudyItemData = ResolvedPlanItem & {
   executionState?: ExecutionState;
   resources?: StudyResource[];
 };
 
-export function ItemRow({
+/**
+ * One study item on /today: a full-width summary with its controls, then the
+ * paid and free resource lanes side by side underneath.
+ *
+ * The lanes are siblings of the summary card, not nested inside it, so a
+ * resource card gets the whole half-width instead of a box within a box.
+ */
+export function StudyItemCard({
   row,
   date,
   orderIndex,
   prerequisiteStatus,
   isHero = false,
+  showResources = true,
 }: {
-  row: ItemRowData;
+  row: StudyItemData;
   date: string;
   orderIndex?: number;
   prerequisiteStatus?: PrerequisiteCheckResult;
   isHero?: boolean;
+  /** Off where the caller does not load resources (e.g. /history), so empty
+      lanes never imply a topic has no sources. */
+  showResources?: boolean;
 }) {
   const { item } = row;
   const [openTime, setOpenTime] = useState(false);
   const [openMore, setOpenMore] = useState(false);
   const [openDetails, setOpenDetails] = useState(false);
   const [openHistory, setOpenHistory] = useState(false);
-  const [openResources, setOpenResources] = useState(isHero);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -96,38 +100,16 @@ export function ItemRow({
   }
 
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
-  const supportsLearningResource = shouldShowLearningResource(item.subject);
-  const resource = supportsLearningResource ? getPlanItemResource(item) : null;
   const resources = row.resources ?? [];
-  const resourceGroups = groupResourcesByTier(resources);
-  // The two-column resource panel replaces the single quick link once the item
-  // actually has resources; English items with none keep the missing warning.
-  const showResourcePanel = resources.length > 0 || supportsLearningResource;
   const topic = planItemTopic(item);
   const lessonRange = lessonRangeText(item);
   const isSkipped = row.status === "skipped";
   const isBlocked = Boolean(prerequisiteStatus?.isBlocked);
-
-  const skipButton = (
-    <Button
-      size="sm"
-      variant={isSkipped ? "secondary" : "outline"}
-      disabled={pending}
-      onClick={() => changeStatus(isSkipped ? "not_started" : "skipped")}
-      title={
-        isSkipped
-          ? "เอากลับมาเรียนตามเดิม"
-          : "ข้ามรายการนี้ ไม่ต้องเรียนแล้ว"
-      }
-    >
-      {isSkipped ? (
-        <Undo2 className="h-3.5 w-3.5 mr-1" />
-      ) : (
-        <SkipForward className="h-3.5 w-3.5 mr-1" />
-      )}
-      {isSkipped ? "เลิกข้าม" : "ข้าม"}
-    </Button>
-  );
+  // Curated-resource subjects still flag a topic that has no source at all.
+  const showMissingResourceWarning =
+    showResources &&
+    shouldShowLearningResource(item.subject) &&
+    resources.length === 0;
 
   const executionState =
     row.executionState ??
@@ -139,32 +121,29 @@ export function ItemRow({
       targetMinutes: item.target_minutes,
     });
 
-  // The one-click link stays available while the resource panel is collapsed;
-  // when it is open the cards carry the links instead.
-  const showQuickLink = Boolean(resource) && !(showResourcePanel && openResources);
-
   const isStudying =
     row.status === "studying" || executionState === "in_progress";
   const displayOrder = orderIndex ?? item.order_index;
   const timeProgress = timeCompletion(row.actualMinutes, item.target_minutes);
 
   return (
-    <Card
-      className={`${
-        isHero
-          ? "border-primary/70 shadow-md ring-2 ring-primary/20 bg-card"
-          : isStudying
-            ? "border-primary/60 shadow-sm ring-1 ring-primary/20"
-            : ""
-      }`}
-    >
-      <CardContent className={isHero ? "pt-5 pb-5" : "pt-4"}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="flex flex-col gap-4">
+      {/* Summary + controls, full width */}
+      <div
+        className={`rounded-xl border bg-card p-5 shadow-sm ${
+          isHero
+            ? "border-primary/60 bg-primary/[0.03]"
+            : isStudying
+              ? "border-primary/40"
+              : "border-border"
+        }`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               {displayOrder !== undefined ? (
                 <span
-                  className={`font-bold tabular-nums text-xs px-2 py-0.5 rounded ${
+                  className={`rounded px-2 py-0.5 font-semibold tabular-nums ${
                     isHero
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
@@ -173,101 +152,67 @@ export function ItemRow({
                   ลำดับที่ {displayOrder}
                 </span>
               ) : null}
-
-              <span className="text-xs text-muted-foreground">
-                {activityLabel(item.activity_type)}
-              </span>
-
-              <span className="text-xs text-muted-foreground">
-                · ความสำคัญ {PRIORITY_LABEL[item.priority] ?? item.priority} (
+              {topicIsSubject(item) ? null : (
+                <span>{subjectLabel(item.subject)}</span>
+              )}
+              <span aria-hidden="true">·</span>
+              <span>{activityLabel(item.activity_type)}</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                ความสำคัญ{PRIORITY_LABEL[item.priority] ?? item.priority} (
                 {PRIORITY_WEIGHT[item.priority]})
               </span>
             </div>
 
-            {/* The topic leads; the course code belongs on its resource card. */}
+            {/* The topic leads; course codes live on the resource cards. */}
             <h3
-              className={`mt-1.5 break-words font-semibold ${
-                isHero ? "text-lg" : "text-base"
+              className={`mt-2 line-clamp-2 break-words font-semibold leading-snug ${
+                isHero ? "text-xl" : "text-lg"
               }`}
             >
               {topic}
             </h3>
 
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {topicIsSubject(item) ? null : `${subjectLabel(item.subject)} · `}
-              {item.target_minutes} นาที
-              {lessonRange ? ` · ${lessonRange}` : ""}
-              {item.course_code && resources.length === 0
-                ? ` · ${item.course_code}`
-                : ""}
-            </p>
-
-            {/* Only when the heading is not already the instructions text. */}
             {item.instructions && topic !== item.instructions.trim() ? (
-              <p className="mt-1 text-sm text-muted-foreground break-words">
+              <p className="mt-1.5 line-clamp-2 break-words text-sm leading-relaxed text-muted-foreground">
                 {item.instructions}
               </p>
             ) : null}
 
-            {/* Prerequisite warning banner */}
-            {isBlocked && prerequisiteStatus?.reason ? (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{prerequisiteStatus.reason}</span>
-              </div>
-            ) : null}
-
-            {/* Progress bar for Hero item */}
-            {isHero ? (
-              <div className="mt-3 max-w-md">
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>ความคืบหน้า</span>
-                  <span className="font-medium">
-                    {row.actualMinutes} / {item.target_minutes} นาที (
-                    {timeProgress.percent}%)
-                  </span>
-                </div>
-                <Progress value={timeProgress.percent} />
-              </div>
+            {lessonRange ? (
+              <p className="mt-1 text-xs text-muted-foreground">{lessonRange}</p>
             ) : null}
           </div>
 
-          <div className="text-right">
-            <div className="flex flex-wrap justify-end gap-1.5">
-              <Badge className={EXECUTION_STATE_CLASS[executionState]}>
-                {EXECUTION_STATE_LABELS[executionState]}
-              </Badge>
-            </div>
-            {!isHero ? (
-              <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-                {row.actualMinutes}/{item.target_minutes} นาที
-              </div>
-            ) : null}
-          </div>
+          <Badge className={`shrink-0 ${EXECUTION_STATE_CLASS[executionState]}`}>
+            {EXECUTION_STATE_LABELS[executionState]}
+          </Badge>
         </div>
 
-        {row.sessions.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {row.sessions.map((s) => (
-              <span
-                key={s.id}
-                className="rounded bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground"
-              >
-                {s.start_time}–{s.end_time} ({s.duration_minutes}น.)
-              </span>
-            ))}
+        {isBlocked && prerequisiteStatus?.reason ? (
+          <div className="mt-3 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{prerequisiteStatus.reason}</span>
           </div>
         ) : null}
 
-        {error ? (
-          <p className="mt-2 text-sm text-destructive">{error}</p>
+        {showMissingResourceWarning ? (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            ยังไม่ได้กำหนดแหล่งเรียนสำหรับหัวข้อนี้
+          </p>
         ) : null}
 
+        <StudyProgress
+          actualMinutes={row.actualMinutes}
+          targetMinutes={item.target_minutes}
+          percent={timeProgress.percent}
+        />
+
+        {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
+
         <div className="mt-4 flex flex-wrap gap-2">
-          {/* "เรียนตอนนี้" (Study Now) button */}
           <Button
-            size={isHero ? "default" : "sm"}
-            variant={isStudying ? "secondary" : "default"}
             disabled={pending || isBlocked || isSkipped}
             onClick={handleStudyNow}
             title={
@@ -275,125 +220,100 @@ export function ItemRow({
                 ? prerequisiteStatus?.reason
                 : "เริ่มเรียนรายการนี้และบันทึกเวลาเรียนทันที"
             }
+            variant={isStudying ? "secondary" : "default"}
           >
-            <Zap className="h-4 w-4 mr-1" />
-            {isStudying
-              ? "กำลังเรียนอยู่"
-              : isHero
-                ? "เรียนตอนนี้"
-                : "เรียนตอนนี้"}
+            <Zap className="h-4 w-4" aria-hidden="true" />
+            {isStudying ? "กำลังเรียนอยู่" : "เรียนตอนนี้"}
           </Button>
 
           <Button
-            size={isHero ? "default" : "sm"}
             variant="secondary"
             disabled={pending || isBlocked}
             onClick={() => changeStatus("studying")}
             title="เริ่มเรียนหรือเรียนต่อ"
           >
-            <Play className="h-4 w-4 mr-1" />
+            <Play className="h-4 w-4" aria-hidden="true" />
             {row.status === "not_started" ? "เริ่มเรียน" : "เรียนต่อ"}
           </Button>
 
           {row.status === "studying" ? (
             <Button
-              size={isHero ? "default" : "sm"}
               variant="outline"
               disabled={pending}
               onClick={() => changeStatus("paused")}
               title="พัก"
             >
-              <Pause className="h-4 w-4 mr-1" />
+              <Pause className="h-4 w-4" aria-hidden="true" />
               พัก
             </Button>
           ) : null}
 
           <Button
-            size={isHero ? "default" : "sm"}
             variant="outline"
             disabled={pending}
             onClick={() => changeStatus("completed")}
             title="ทำรายการนี้เสร็จแล้ว"
           >
-            <Check className="h-4 w-4 mr-1" />
+            <Check className="h-4 w-4" aria-hidden="true" />
             เรียนเสร็จ
           </Button>
 
           <Button
-            size={isHero ? "default" : "sm"}
             variant="outline"
             onClick={() => setOpenTime((v) => !v)}
             title="เพิ่มเวลาเรียนจริง"
+            aria-expanded={openTime}
           >
-            <Clock className="h-4 w-4 mr-1" />
+            <Clock className="h-4 w-4" aria-hidden="true" />
             เพิ่มเวลา
           </Button>
 
-          {showQuickLink && resource ? (
-            <a
-              href={resource.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({
-                variant: "outline",
-                size: isHero ? "default" : "sm",
-              })}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
-              {resource.label}
-            </a>
-          ) : null}
-
-          {supportsLearningResource && resources.length === 0 && !resource ? (
-            <span
-              className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
-              title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
-            >
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              ยังไม่ได้กำหนดแหล่งเรียน
-            </span>
-          ) : null}
-
-          {showResourcePanel && !isHero ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setOpenResources((v) => !v)}
-              title="ดูแหล่งเรียนของหัวข้อนี้"
-            >
-              <Library className="h-4 w-4 mr-1" />
-              แหล่งเรียน ({resourceGroups.paid.length}/
-              {resourceGroups.free.length})
-            </Button>
-          ) : null}
-
           <Button
-            size={isHero ? "default" : "sm"}
             variant="ghost"
             onClick={() => setOpenMore((v) => !v)}
             title="เปิดเมนูเพิ่มเติม"
+            aria-label="เมนูเพิ่มเติม"
+            aria-expanded={openMore}
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
 
-        {showResourcePanel && openResources ? (
-          <div className="mt-4 border-t border-border pt-4">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              แหล่งเรียนของหัวข้อนี้ · เปิดในแท็บใหม่
-            </p>
-            <ResourceColumns
-              planItemId={item.id}
-              resources={resources}
-              today={date}
-            />
+        {/* Secondary: today's logged intervals. */}
+        {row.sessions.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {row.sessions.map((session) => (
+              <span
+                key={session.id}
+                className="rounded bg-muted/70 px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground"
+              >
+                {session.start_time}–{session.end_time} (
+                {session.duration_minutes}น.)
+              </span>
+            ))}
           </div>
         ) : null}
 
         {openMore ? (
-          <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-            {skipButton}
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+            <Button
+              size="sm"
+              variant={isSkipped ? "secondary" : "outline"}
+              disabled={pending}
+              onClick={() => changeStatus(isSkipped ? "not_started" : "skipped")}
+              title={
+                isSkipped
+                  ? "เอากลับมาเรียนตามเดิม"
+                  : "ข้ามรายการนี้ ไม่ต้องเรียนแล้ว"
+              }
+            >
+              {isSkipped ? (
+                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <SkipForward className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {isSkipped ? "เลิกข้าม" : "ข้าม"}
+            </Button>
             {isAssessment ? (
               <Link href={`/assessments?item=${item.id}`}>
                 <Button size="sm" variant="outline">
@@ -410,6 +330,7 @@ export function ItemRow({
               size="sm"
               variant="outline"
               onClick={() => setOpenDetails((v) => !v)}
+              aria-expanded={openDetails}
             >
               รายละเอียดแผน
             </Button>
@@ -417,15 +338,16 @@ export function ItemRow({
               size="sm"
               variant="outline"
               onClick={() => setOpenHistory((v) => !v)}
+              aria-expanded={openHistory}
             >
-              <History className="h-3.5 w-3.5 mr-1" />
+              <History className="h-3.5 w-3.5" aria-hidden="true" />
               ประวัติการเรียน
             </Button>
           </div>
         ) : null}
 
         {openDetails ? (
-          <div className="mt-4 rounded-md border border-border p-3 text-sm">
+          <div className="mt-4 rounded-lg border border-border p-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-2">
               <Detail label="หัวข้อ" value={topic} />
               <Detail label="วิชา" value={item.subject} />
@@ -471,8 +393,35 @@ export function ItemRow({
             />
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Learning resources: two full lanes, not a nested mini-grid. */}
+      {showResources ? (
+        <ResourceGrid planItemId={item.id} resources={resources} today={date} />
+      ) : null}
+    </section>
+  );
+}
+
+function StudyProgress({
+  actualMinutes,
+  targetMinutes,
+  percent,
+}: {
+  actualMinutes: number;
+  targetMinutes: number;
+  percent: number;
+}) {
+  return (
+    <div className="mt-4">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-xs">
+        <span className="text-muted-foreground">ความคืบหน้า</span>
+        <span className="font-medium tabular-nums">
+          {actualMinutes} / {targetMinutes} นาที ({percent}%)
+        </span>
+      </div>
+      <Progress value={percent} />
+    </div>
   );
 }
 

@@ -12,7 +12,7 @@ import {
 import type { QueuePlanItem } from "@/features/today/data";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { ItemRow } from "./item-row";
+import { StudyItemCard } from "./study-item-card";
 import {
   saveDailyExecutionOrder,
   resetDailyExecutionOrder,
@@ -238,7 +238,7 @@ export function ReorderableQueue({
 
                 {/* Main Item Row */}
                 <div className="flex-1 min-w-0">
-                  <ItemRow
+                  <StudyItemCard
                     row={row}
                     date={date}
                     orderIndex={index + 1}

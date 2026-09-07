@@ -9,7 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
-import { ItemRow } from "@/features/today/item-row";
+import { StudyItemCard } from "@/features/today/study-item-card";
 import { ResultForm } from "@/features/assessments/result-form";
 import { HistoryDatePicker } from "@/features/history/date-picker";
 import { SessionHistoryList } from "@/features/sessions/session-history";
@@ -118,7 +118,12 @@ export default async function HistoryPage({
           />
         ) : (
           rowsWithHistory.map((row) => (
-            <ItemRow key={row.item.id} row={row} date={date} />
+            <StudyItemCard
+              key={row.item.id}
+              row={row}
+              date={date}
+              showResources={false}
+            />
           ))
         )}
       </section>

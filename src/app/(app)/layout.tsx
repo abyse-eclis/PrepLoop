@@ -12,8 +12,13 @@ export default async function AppLayout({
     <ToastProvider>
       <div className="flex min-h-screen">
         <AppNav />
-        <main className="flex-1 pb-20 md:pb-0">
-          <div className="mx-auto w-full max-w-5xl p-4 md:p-6">{children}</div>
+        <main className="min-w-0 flex-1 pb-20 md:pb-0">
+          {/* Reading-width by default. A page whose root carries
+              `data-wide-page` (e.g. /today's two-lane resource layout) opts
+              into the full desktop width instead. */}
+          <div className="mx-auto w-full max-w-5xl p-4 [&:has([data-wide-page])]:max-w-[1400px] md:p-6">
+            {children}
+          </div>
         </main>
       </div>
     </ToastProvider>
