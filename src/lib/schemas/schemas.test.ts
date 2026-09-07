@@ -216,6 +216,124 @@ describe("studyPlanSchema", () => {
   });
 });
 
+describe("studyPlanSchema · hybrid resources", () => {
+  const hybridItem = {
+    stableExternalId: "2026-09-02-physics-kinematics",
+    subject: "PHYSICS",
+    topic: "การเคลื่อนที่แนวตรง",
+    activityType: "course",
+    targetMinutes: 75,
+    priority: "high",
+    resources: [
+      {
+        tier: "PAID",
+        type: "COURSE",
+        provider: "SmartMathPro",
+        title: "พิชิตกลศาสตร์",
+        courseCode: "X003",
+        lessonFrom: "032",
+        lessonTo: "035",
+        accessType: "EXPIRING",
+        expiresAt: "2027-07-10",
+        status: "NOT_STARTED",
+      },
+      {
+        tier: "FREE",
+        type: "YOUTUBE",
+        provider: "YouTube",
+        title: "การเคลื่อนที่แนวตรง",
+        url: "https://www.youtube.com/watch?v=abc",
+        accessType: "FREE",
+        listenMode: true,
+        durationMinutes: 28,
+        status: "NOT_STARTED",
+      },
+    ],
+  };
+
+  it("accepts a plan item carrying paid and free resources", () => {
+    const parsed = planItemSchema.parse(hybridItem);
+    expect(parsed.topic).toBe("การเคลื่อนที่แนวตรง");
+    expect(parsed.resources).toHaveLength(2);
+    expect(parsed.resources?.[1]).toMatchObject({
+      tier: "FREE",
+      type: "YOUTUBE",
+      listenMode: true,
+      status: "NOT_STARTED",
+    });
+  });
+
+  it("mirrors the primary resource into the legacy columns", () => {
+    const parsed = planItemSchema.parse(hybridItem);
+    expect(parsed.courseCode).toBe("X003");
+    expect(parsed.lessonFrom).toBe("032");
+    expect(parsed.lessonTo).toBe("035");
+    expect(parsed.resourceUrl).toBe("https://www.youtube.com/watch?v=abc");
+    expect(parsed.resourceLabel).toBe("YouTube");
+  });
+
+  it("does not touch the legacy columns a plan already sets", () => {
+    const parsed = planItemSchema.parse({
+      ...hybridItem,
+      courseCode: "M110",
+      resourceUrl: "https://example.com/own",
+      resourceLabel: "ลิงก์ของฉัน",
+    });
+    expect(parsed.courseCode).toBe("M110");
+    expect(parsed.resourceUrl).toBe("https://example.com/own");
+    expect(parsed.resourceLabel).toBe("ลิงก์ของฉัน");
+  });
+
+  it("accepts lowercase enum values from hand-written JSON", () => {
+    const parsed = planItemSchema.parse({
+      ...hybridItem,
+      resources: [
+        { tier: "free", type: "youtube", title: "คลิปสรุป", status: "listened" },
+      ],
+    });
+    expect(parsed.resources?.[0]).toMatchObject({
+      tier: "FREE",
+      type: "YOUTUBE",
+      status: "LISTENED",
+    });
+  });
+
+  it("requires title, tier and type on every resource", () => {
+    for (const bad of [
+      { tier: "PAID", type: "COURSE" },
+      { type: "COURSE", title: "ไม่มี tier" },
+      { tier: "PAID", title: "ไม่มี type" },
+    ]) {
+      expect(
+        planItemSchema.safeParse({ ...hybridItem, resources: [bad] }).success
+      ).toBe(false);
+    }
+  });
+
+  it("rejects a non-http resource url", () => {
+    expect(
+      planItemSchema.safeParse({
+        ...hybridItem,
+        resources: [
+          {
+            tier: "FREE",
+            type: "WEBSITE",
+            title: "อันตราย",
+            url: "javascript:alert(1)",
+          },
+        ],
+      }).success
+    ).toBe(false);
+  });
+
+  it("still imports a legacy plan that has no resources at all", () => {
+    const res = validateWithSchema(plan, studyPlanSchema);
+    expect(res.ok).toBe(true);
+    expect(res.data?.days[0]!.items[0]!.resources).toBeUndefined();
+    expect(res.data?.days[0]!.items[0]!.topic).toBeUndefined();
+  });
+});
+
 describe("recoveryPlanSchema", () => {
   it("validates recovery response", () => {
     const recovery = {

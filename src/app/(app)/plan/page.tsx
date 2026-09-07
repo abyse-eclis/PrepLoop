@@ -3,15 +3,20 @@ import Link from "next/link";
 import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { addDays, todayInTimezone } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { PLAN_VERSION_STATUS_LABELS } from "@/lib/plans/immutable";
 import { diffPlans, summarizeDiff } from "@/lib/plans/diff";
 import { PlanSchedule } from "@/features/plans/plan-schedule";
 import { getPlanItemResource } from "@/lib/plans/resource";
 import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
+import { planItemTopic, lessonRangeText } from "@/lib/plans/topic";
+import { subjectLabel } from "@/lib/subjects";
+import { getResourcesByPlanItem } from "@/features/resources/data";
+import { resolveItemResources } from "@/lib/resources/resolve";
+import { ResourceColumns } from "@/features/resources/resource-columns";
 import { activityLabel } from "@/lib/status";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import {
   ActivateButton,
   RecoveryPanel,
@@ -205,6 +210,7 @@ export default async function PlanPage({
                     selected={selected}
                     bounds={bounds}
                     selectedItemExternalId={selectedItemExternalId}
+                    today={today}
                   />
                 </Suspense>
               </>
@@ -224,11 +230,13 @@ async function PlanScheduleSection({
   selected,
   bounds,
   selectedItemExternalId,
+  today,
 }: {
   workspaceId: string;
   selected: PlanVersion;
   bounds: PlanRange;
   selectedItemExternalId?: string;
+  today: string;
 }) {
   const itemOptions =
     bounds.mode === "all"
@@ -254,6 +262,15 @@ async function PlanScheduleSection({
     selectedItem && supportsLearningResource
       ? getPlanItemResource(selectedItem)
       : null;
+
+  // One query, then legacy fallback — an item with no resource rows is still
+  // rendered from its own course_code / resource_url columns.
+  const selectedItemResources = selectedItem
+    ? resolveItemResources(
+        selectedItem,
+        await getResourcesByPlanItem(workspaceId, [selectedItem.id])
+      )
+    : [];
 
   const diff =
     selected.parent_version_id && parentItems.length > 0
@@ -287,55 +304,43 @@ async function PlanScheduleSection({
           <CardHeader>
             <CardTitle>รายละเอียดรายการเรียน</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            <div className="font-medium">{selectedItem.subject}</div>
-            <div className="text-muted-foreground">
-              {activityLabel(selectedItem.activity_type)}
-              {selectedItem.course_code ? ` · ${selectedItem.course_code}` : ""}
-              {selectedItem.lesson_from
-                ? ` · คลิป ${selectedItem.lesson_from}`
-                : ""}
-              {selectedItem.lesson_to &&
-              selectedItem.lesson_to !== selectedItem.lesson_from
-                ? `–${selectedItem.lesson_to}`
-                : ""}
+          <CardContent className="flex flex-col gap-3 text-sm">
+            <div>
+              {/* The topic leads; source and course code sit below it. */}
+              <div className="text-base font-semibold">
+                {planItemTopic(selectedItem)}
+              </div>
+              <div className="mt-0.5 text-muted-foreground">
+                {subjectLabel(selectedItem.subject)} ·{" "}
+                {selectedItem.target_minutes} นาที ·{" "}
+                {activityLabel(selectedItem.activity_type)}
+                {lessonRangeText(selectedItem)
+                  ? ` · ${lessonRangeText(selectedItem)}`
+                  : ""}
+              </div>
             </div>
             {selectedItem.instructions ? (
               <p className="text-muted-foreground">
                 {selectedItem.instructions}
               </p>
             ) : null}
-            {shouldShowLearningResource(selectedItem.subject) ? (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-xs text-muted-foreground">แหล่งเรียน</span>
-                {selectedItemResource ? (
-                  <>
-                    {selectedItemResource.sourceName ? (
-                      <span className="text-xs text-muted-foreground">
-                        {selectedItemResource.sourceName}
-                      </span>
-                    ) : null}
-                    <a
-                      href={selectedItemResource.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${selectedItemResource.label}สำหรับ ${selectedItem.subject}${selectedItemResource.sourceName ? ` จาก ${selectedItemResource.sourceName}` : ""}`}
-                      title={selectedItemResource.tooltip}
-                      className={buttonVariants({
-                        variant: "outline",
-                        size: "sm",
-                      })}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      {selectedItemResource.label}
-                    </a>
-                  </>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+
+            {selectedItemResources.length > 0 || supportsLearningResource ? (
+              <div className="pt-1">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  แหล่งเรียน · เปิดในแท็บใหม่
+                </p>
+                {selectedItemResources.length === 0 && !selectedItemResource ? (
+                  <p className="mb-2 inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
                     <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
                     ยังไม่ได้กำหนดแหล่งเรียน
-                  </span>
-                )}
+                  </p>
+                ) : null}
+                <ResourceColumns
+                  planItemId={selectedItem.id}
+                  resources={selectedItemResources}
+                  today={today}
+                />
               </div>
             ) : null}
           </CardContent>

@@ -9,6 +9,7 @@ import {
   Clock,
   ExternalLink,
   History,
+  Library,
   MoreHorizontal,
   Pause,
   Play,
@@ -38,6 +39,10 @@ import type { PrerequisiteCheckResult } from "@/lib/execution-order";
 import { formatDateKeyThai } from "@/lib/dates";
 import { getPlanItemResource } from "@/lib/plans/resource";
 import { shouldShowLearningResource } from "@/lib/plans/resource-policy";
+import { lessonRangeText, planItemTopic, topicIsSubject } from "@/lib/plans/topic";
+import { groupResourcesByTier } from "@/lib/resources/group";
+import type { StudyResource } from "@/lib/resources/types";
+import { ResourceColumns } from "@/features/resources/resource-columns";
 
 const PRIORITY_LABEL: Record<string, string> = {
   high: "สูง",
@@ -47,7 +52,10 @@ const PRIORITY_LABEL: Record<string, string> = {
 
 const ASSESSMENT_TYPES = new Set(["diagnostic", "quiz", "exercise", "mock"]);
 
-type ItemRowData = ResolvedPlanItem & { executionState?: ExecutionState };
+type ItemRowData = ResolvedPlanItem & {
+  executionState?: ExecutionState;
+  resources?: StudyResource[];
+};
 
 export function ItemRow({
   row,
@@ -67,6 +75,7 @@ export function ItemRow({
   const [openMore, setOpenMore] = useState(false);
   const [openDetails, setOpenDetails] = useState(false);
   const [openHistory, setOpenHistory] = useState(false);
+  const [openResources, setOpenResources] = useState(isHero);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +98,13 @@ export function ItemRow({
   const isAssessment = ASSESSMENT_TYPES.has(item.activity_type);
   const supportsLearningResource = shouldShowLearningResource(item.subject);
   const resource = supportsLearningResource ? getPlanItemResource(item) : null;
+  const resources = row.resources ?? [];
+  const resourceGroups = groupResourcesByTier(resources);
+  // The two-column resource panel replaces the single quick link once the item
+  // actually has resources; English items with none keep the missing warning.
+  const showResourcePanel = resources.length > 0 || supportsLearningResource;
+  const topic = planItemTopic(item);
+  const lessonRange = lessonRangeText(item);
   const isSkipped = row.status === "skipped";
   const isBlocked = Boolean(prerequisiteStatus?.isBlocked);
 
@@ -123,6 +139,10 @@ export function ItemRow({
       targetMinutes: item.target_minutes,
     });
 
+  // The one-click link stays available while the resource panel is collapsed;
+  // when it is open the cards carry the links instead.
+  const showQuickLink = Boolean(resource) && !(showResourcePanel && openResources);
+
   const isStudying =
     row.status === "studying" || executionState === "in_progress";
   const displayOrder = orderIndex ?? item.order_index;
@@ -154,16 +174,6 @@ export function ItemRow({
                 </span>
               ) : null}
 
-              <span className="font-semibold text-base">
-                {subjectLabel(item.subject)}
-              </span>
-
-              {item.course_code ? (
-                <span className="rounded bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-                  {item.course_code}
-                </span>
-              ) : null}
-
               <span className="text-xs text-muted-foreground">
                 {activityLabel(item.activity_type)}
               </span>
@@ -174,16 +184,26 @@ export function ItemRow({
               </span>
             </div>
 
-            {item.lesson_from ? (
-              <p className="mt-1.5 text-sm font-medium text-foreground">
-                คลิป {item.lesson_from}
-                {item.lesson_to && item.lesson_to !== item.lesson_from
-                  ? `–${item.lesson_to}`
-                  : ""}
-              </p>
-            ) : null}
+            {/* The topic leads; the course code belongs on its resource card. */}
+            <h3
+              className={`mt-1.5 break-words font-semibold ${
+                isHero ? "text-lg" : "text-base"
+              }`}
+            >
+              {topic}
+            </h3>
 
-            {item.instructions ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {topicIsSubject(item) ? null : `${subjectLabel(item.subject)} · `}
+              {item.target_minutes} นาที
+              {lessonRange ? ` · ${lessonRange}` : ""}
+              {item.course_code && resources.length === 0
+                ? ` · ${item.course_code}`
+                : ""}
+            </p>
+
+            {/* Only when the heading is not already the instructions text. */}
+            {item.instructions && topic !== item.instructions.trim() ? (
               <p className="mt-1 text-sm text-muted-foreground break-words">
                 {item.instructions}
               </p>
@@ -309,30 +329,43 @@ export function ItemRow({
             เพิ่มเวลา
           </Button>
 
-          {supportsLearningResource ? (
-            resource ? (
-              <a
-                href={resource.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonVariants({
-                  variant: "outline",
-                  size: isHero ? "default" : "sm",
-                })}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
-                {resource.label}
-              </a>
-            ) : (
-              <span
-                className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
-                title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
-              >
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                ยังไม่ได้กำหนดแหล่งเรียน
-              </span>
-            )
+          {showQuickLink && resource ? (
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({
+                variant: "outline",
+                size: isHero ? "default" : "sm",
+              })}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
+              {resource.label}
+            </a>
+          ) : null}
+
+          {supportsLearningResource && resources.length === 0 && !resource ? (
+            <span
+              className="inline-flex items-center gap-1 rounded border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
+              title="รายการนี้ยังไม่ได้กำหนดลิงก์แหล่งเรียนหรือวิดีโอ"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ยังไม่ได้กำหนดแหล่งเรียน
+            </span>
+          ) : null}
+
+          {showResourcePanel && !isHero ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOpenResources((v) => !v)}
+              title="ดูแหล่งเรียนของหัวข้อนี้"
+            >
+              <Library className="h-4 w-4 mr-1" />
+              แหล่งเรียน ({resourceGroups.paid.length}/
+              {resourceGroups.free.length})
+            </Button>
           ) : null}
 
           <Button
@@ -344,6 +377,19 @@ export function ItemRow({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
+
+        {showResourcePanel && openResources ? (
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              แหล่งเรียนของหัวข้อนี้ · เปิดในแท็บใหม่
+            </p>
+            <ResourceColumns
+              planItemId={item.id}
+              resources={resources}
+              today={date}
+            />
+          </div>
+        ) : null}
 
         {openMore ? (
           <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
@@ -381,6 +427,7 @@ export function ItemRow({
         {openDetails ? (
           <div className="mt-4 rounded-md border border-border p-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-2">
+              <Detail label="หัวข้อ" value={topic} />
               <Detail label="วิชา" value={item.subject} />
               <Detail label="คอร์ส" value={item.course_code ?? "-"} />
               <Detail

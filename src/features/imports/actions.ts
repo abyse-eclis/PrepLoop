@@ -34,6 +34,7 @@ import {
 } from "@/lib/imports/errors";
 
 const LESSON_BATCH_SIZE = 400;
+const RESOURCE_BATCH_SIZE = 400;
 
 export interface ImportDebug {
   entity?: string;
@@ -597,6 +598,7 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
 
   let itemCount = 0;
   let queuePosition = 1;
+  const resourceRows: Array<Record<string, unknown>> = [];
   // A legacy plan's day order becomes its queue order. Sorting here makes the
   // result deterministic even when JSON days were not chronologically ordered.
   const orderedDays = plan.days
@@ -626,6 +628,7 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
         date: day.date,
         stable_external_id: item.stableExternalId,
         subject: item.subject,
+        topic: item.topic ?? null,
         course_code: item.courseCode ?? null,
         lesson_from: item.lessonFrom ?? null,
         lesson_to: item.lessonTo ?? null,
@@ -641,17 +644,61 @@ export async function importStudyPlan(raw: string): Promise<ImportResult> {
         order_index: queuePosition++,
         scheduled_at: item.scheduledAt ?? null,
       }));
-      const { error: itemErr } = await supabase
+      const { data: insertedItems, error: itemErr } = await supabase
         .from("study_plan_items")
-        .insert(itemRows);
+        .insert(itemRows)
+        .select("id, stable_external_id");
       if (itemErr) return { ok: false, error: itemErr.message };
       itemCount += itemRows.length;
+
+      // Hybrid resources (paid course + free sources) of each item. Legacy
+      // plans carry none and simply skip this — their resource_url /
+      // course_code columns keep being read as before.
+      const idByExternalId = new Map(
+        ((insertedItems as Array<{ id: string; stable_external_id: string }> | null) ??
+          []).map((row) => [row.stable_external_id, row.id])
+      );
+      for (const item of day.items) {
+        const planItemId = idByExternalId.get(item.stableExternalId);
+        if (!planItemId || !item.resources?.length) continue;
+        item.resources.forEach((resource, index) => {
+          resourceRows.push({
+            workspace_id: workspace.id,
+            study_plan_item_id: planItemId,
+            tier: resource.tier,
+            type: resource.type,
+            provider: resource.provider ?? null,
+            title: resource.title,
+            url: resource.url ?? null,
+            course_code: resource.courseCode ?? null,
+            lesson_from: resource.lessonFrom ?? null,
+            lesson_to: resource.lessonTo ?? null,
+            duration_minutes: resource.durationMinutes ?? null,
+            status: resource.status,
+            access_type: resource.accessType ?? null,
+            expires_at: resource.expiresAt ?? null,
+            limited_watch_time: resource.limitedWatchTime,
+            listen_mode: resource.listenMode,
+            sort_order: resource.sortOrder ?? index,
+            legacy_key: null,
+            metadata: resource.metadata ?? null,
+          });
+        });
+      }
     }
+  }
+
+  for (const batch of chunk(resourceRows, RESOURCE_BATCH_SIZE)) {
+    const { error: resourceErr } = await supabase
+      .from("study_resources")
+      .insert(batch);
+    if (resourceErr) return { ok: false, error: resourceErr.message };
   }
 
   const summary = {
     days: plan.days.length,
     items: itemCount,
+    resources: resourceRows.length,
     planVersion: versionNumber,
   };
   await recordImport(workspace.id, "study_plan", summary);

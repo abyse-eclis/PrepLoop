@@ -8,6 +8,10 @@ import {
   resolvePlanItems,
 } from "@/features/plans/data";
 import { deriveExecutionState } from "@/lib/study-execution";
+import { getResourcesByPlanItem } from "@/features/resources/data";
+import { resolveItemResources } from "@/lib/resources/resolve";
+import { groupResourcesByTier, summarizeResourceProgress } from "@/lib/resources/group";
+import { planItemTopic } from "@/lib/plans/topic";
 import type { ResolvedExportRange } from "@/lib/export/range";
 import type {
   ExportAssessmentRow,
@@ -116,8 +120,19 @@ export async function buildStudyExport(
   const versionById = new Map(versions.map((v) => [v.id, v]));
   const resolved = await resolvePlanItems(workspace.id, ownedItems);
 
+  // One batched query for every exported item — no per-item lookups.
+  const resourcesByItem = await getResourcesByPlanItem(
+    workspace.id,
+    resolved.map((row) => row.item.id)
+  );
+
   const planItemRows: ExportPlanItemRow[] = resolved.map((row) => {
     const version = versionById.get(row.item.plan_version_id) ?? null;
+    const groups = groupResourcesByTier(
+      resolveItemResources(row.item, resourcesByItem, row.status)
+    );
+    const paidProgress = summarizeResourceProgress(groups.paid);
+    const freeProgress = summarizeResourceProgress(groups.free);
     return {
       id: row.item.id,
       plannedDate: row.item.date,
@@ -127,6 +142,7 @@ export async function buildStudyExport(
       planVersionNumber: version?.version_number ?? null,
       stableExternalId: row.item.stable_external_id,
       subject: row.item.subject,
+      topic: planItemTopic(row.item),
       courseCode: row.item.course_code,
       activityType: row.item.activity_type,
       lessonFrom: row.item.lesson_from,
@@ -145,6 +161,28 @@ export async function buildStudyExport(
       instructions: row.item.instructions,
       resourceUrl: row.item.resource_url,
       resourceLabel: row.item.resource_label,
+      paidResources: paidProgress.total,
+      paidResourcesCompleted: paidProgress.completed,
+      freeResources: freeProgress.total,
+      freeResourcesCompleted: freeProgress.completed,
+      resources: [...groups.paid, ...groups.free].map((resource) => ({
+        id: resource.id,
+        tier: resource.tier,
+        type: resource.type,
+        provider: resource.provider,
+        title: resource.title,
+        url: resource.url,
+        courseCode: resource.courseCode,
+        lessonFrom: resource.lessonFrom,
+        lessonTo: resource.lessonTo,
+        durationMinutes: resource.durationMinutes,
+        status: resource.status,
+        accessType: resource.accessType,
+        expiresAt: resource.expiresAt,
+        limitedWatchTime: resource.limitedWatchTime,
+        listenMode: resource.listenMode,
+        legacy: resource.isLegacy,
+      })),
       assessmentSourceId: row.item.assessment_source_id,
       reviewReferenceIds: row.item.review_reference_ids,
       metadata: row.item.metadata,

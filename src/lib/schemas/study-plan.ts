@@ -5,6 +5,11 @@ import {
   generatedByEnum,
   priorityEnum,
 } from "./common";
+import {
+  pickPrimaryCourseResource,
+  pickPrimaryResource,
+  studyResourceSchema,
+} from "./study-resource";
 
 const resourceUrlSchema = z
   .string()
@@ -19,6 +24,8 @@ export const planItemSchema = z
   .object({
     stableExternalId: z.string().min(1),
     subject: z.string().min(1),
+    /** What is being studied. Optional: legacy plans fall back to instructions. */
+    topic: z.string().trim().min(1).nullable().optional(),
     courseCode: z.string().nullable().optional(),
     lessonFrom: z.string().nullable().optional(),
     lessonTo: z.string().nullable().optional(),
@@ -29,6 +36,8 @@ export const planItemSchema = z
     instructions: z.string().optional().default(""),
     resourceUrl: resourceUrlSchema.optional(),
     resourceLabel: z.string().optional(),
+    /** Hybrid paid/free learning resources. Absent on legacy plans. */
+    resources: z.array(studyResourceSchema).optional(),
     reviewReferenceIds: z.array(z.string()).optional().default([]),
     metadata: z.record(z.string(), z.any()).optional(),
     scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
@@ -44,12 +53,35 @@ export const planItemSchema = z
               item.metadata.resourceUrl.startsWith("https://"))
           ? item.metadata.resourceUrl
           : undefined;
-    const resourceUrl = item.resourceUrl ?? fallbackResourceUrl;
-    if (!resourceUrl) return item;
-    return {
+
+    // Keep the legacy columns meaningful for plans written in the new format,
+    // so exports, the plan diff and course progress keep reading them.
+    const resources = item.resources ?? [];
+    const primary = pickPrimaryResource(resources);
+    const primaryCourse = pickPrimaryCourseResource(resources);
+    const courseCode = item.courseCode ?? primaryCourse?.courseCode ?? undefined;
+    const lessonFrom = item.lessonFrom ?? primaryCourse?.lessonFrom ?? undefined;
+    const lessonTo = item.lessonTo ?? primaryCourse?.lessonTo ?? undefined;
+
+    const withLegacyFields = {
       ...item,
+      ...(courseCode !== undefined ? { courseCode } : {}),
+      ...(lessonFrom !== undefined ? { lessonFrom } : {}),
+      ...(lessonTo !== undefined ? { lessonTo } : {}),
+    };
+
+    const resourceUrl =
+      item.resourceUrl ?? fallbackResourceUrl ?? primary?.url ?? undefined;
+    if (!resourceUrl) return withLegacyFields;
+    return {
+      ...withLegacyFields,
       resourceUrl,
-      resourceLabel: item.resourceLabel ?? "เปิดลิงก์",
+      resourceLabel:
+        item.resourceLabel ??
+        (primary?.url === resourceUrl
+          ? (primary.provider ?? primary.title)
+          : undefined) ??
+        "เปิดลิงก์",
     };
   });
 

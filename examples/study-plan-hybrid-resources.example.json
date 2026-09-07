@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.1",
+  "name": "TCAS70 Hybrid Resource Demo",
+  "description": "ตัวอย่างแผนที่แต่ละหัวข้อมีทั้งคอร์สที่ซื้อมาและแหล่งเรียนฟรี",
+  "startDate": "2026-09-01",
+  "endDate": "2026-09-02",
+  "generatedBy": "chatgpt",
+  "days": [
+    {
+      "date": "2026-09-01",
+      "targetMinutes": 240,
+      "napTargetMinutes": 45,
+      "items": [
+        {
+          "stableExternalId": "2026-09-01-physics-kinematics",
+          "subject": "PHYSICS",
+          "topic": "การเคลื่อนที่แนวตรง",
+          "activityType": "course",
+          "targetMinutes": 75,
+          "priority": "high",
+          "instructions": "ดูคอร์สหลักก่อน แล้วค่อยฟังคลิปสรุปทวน",
+          "resources": [
+            {
+              "tier": "PAID",
+              "type": "COURSE",
+              "provider": "SmartMathPro",
+              "title": "พิชิตกลศาสตร์",
+              "courseCode": "X003",
+              "lessonFrom": "032",
+              "lessonTo": "035",
+              "accessType": "EXPIRING",
+              "expiresAt": "2027-07-10",
+              "limitedWatchTime": false,
+              "status": "NOT_STARTED"
+            },
+            {
+              "tier": "FREE",
+              "type": "YOUTUBE",
+              "provider": "YouTube",
+              "title": "การเคลื่อนที่แนวตรง — ปูพื้นก่อนเรียน",
+              "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "durationMinutes": 28,
+              "accessType": "FREE",
+              "listenMode": true,
+              "status": "NOT_STARTED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-09-02",
+      "targetMinutes": 180,
+      "napTargetMinutes": 30,
+      "items": [
+        {
+          "stableExternalId": "2026-09-02-math-real-numbers",
+          "subject": "A_LEVEL_MATH_1",
+          "topic": "จำนวนจริง",
+          "activityType": "course",
+          "targetMinutes": 90,
+          "priority": "high",
+          "resources": [
+            {
+              "tier": "PAID",
+              "type": "COURSE",
+              "provider": "SmartMathPro",
+              "title": "พิชิต A-Level คณิต 1",
+              "courseCode": "M110",
+              "lessonFrom": "012",
+              "lessonTo": "018",
+              "accessType": "LIMITED_HOURS",
+              "limitedWatchTime": true,
+              "status": "IN_PROGRESS"
+            },
+            {
+              "tier": "FREE",
+              "type": "DOCUMENT",
+              "provider": "สรุปของตัวเอง",
+              "title": "ชีตสรุปสมบัติจำนวนจริง",
+              "url": "https://example.com/summary-real-numbers.pdf",
+              "accessType": "PERMANENT",
+              "status": "NOT_STARTED"
+            }
+          ]
+        },
+        {
+          "stableExternalId": "2026-09-02-legacy-item",
+          "subject": "TGAT1",
+          "courseCode": "L029",
+          "lessonFrom": "025",
+          "lessonTo": "025",
+          "activityType": "review",
+          "targetMinutes": 45,
+          "priority": "medium",
+          "instructions": "รายการรูปแบบเดิม (ไม่มี resources[]) — ยังนำเข้าได้ตามปกติ",
+          "resourceUrl": "https://www.youtube.com/watch?v=0nXxgts-RWc",
+          "resourceLabel": "KruP’ONE OpenDurianTCAS"
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,7 @@ drop table if exists
   public.assessment_attempts,
   public.study_sessions,
   public.item_status_overrides,
+  public.study_resources,
   public.study_plan_items,
   public.study_plan_days,
   public.study_plan_versions,

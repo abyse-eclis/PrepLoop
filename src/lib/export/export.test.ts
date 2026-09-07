@@ -182,6 +182,7 @@ function sampleExport(): StudyExport {
         planVersionNumber: 1,
         stableExternalId: "item-1",
         subject: "คณิต",
+        topic: "โครงสร้างประโยคพื้นฐาน",
         courseCode: "MATH-1",
         activityType: "course",
         lessonFrom: "1",

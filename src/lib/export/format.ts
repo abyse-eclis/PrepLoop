@@ -164,6 +164,11 @@ function itemsCsv(data: StudyExport): string {
       "stable_external_id",
       "resource_url",
       "resource_label",
+      "topic",
+      "paid_resources",
+      "paid_resources_completed",
+      "free_resources",
+      "free_resources_completed",
     ],
     data.planItems.map((i) => [
       i.plannedDate,
@@ -185,6 +190,11 @@ function itemsCsv(data: StudyExport): string {
       i.stableExternalId,
       i.resourceUrl ?? "",
       i.resourceLabel ?? "",
+      i.topic,
+      i.paidResources ?? 0,
+      i.paidResourcesCompleted ?? 0,
+      i.freeResources ?? 0,
+      i.freeResourcesCompleted ?? 0,
     ])
   );
 }

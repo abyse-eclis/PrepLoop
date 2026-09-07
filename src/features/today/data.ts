@@ -14,6 +14,9 @@ import {
   type ResolvedPlanItem,
 } from "@/features/plans/data";
 import { REVIEW_TASK_COLUMNS } from "@/features/reviews/data";
+import { getResourcesByPlanItem } from "@/features/resources/data";
+import { resolveItemResources } from "@/lib/resources/resolve";
+import type { StudyResource } from "@/lib/resources/types";
 import {
   checkTaskPrerequisites,
   type PrerequisiteCheckResult,
@@ -42,6 +45,8 @@ const UPCOMING_LIMIT = 7;
 export interface QueuePlanItem extends ResolvedPlanItem {
   executionState: ExecutionState;
   prerequisiteStatus?: PrerequisiteCheckResult;
+  /** Paid + free learning resources of this topic (legacy items included). */
+  resources: StudyResource[];
 }
 
 export interface TodayStudyQueue {
@@ -289,10 +294,19 @@ export async function getStudyQueue(
   const planProgressPercent =
     totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
+  // Only the rows actually rendered need their resources, and they are fetched
+  // in one query for all of them — never one request per resource card.
+  const visibleItems = candidateItems.slice(0, upcomingLimit + 1);
+  const resourcesByItem = await getResourcesByPlanItem(
+    workspaceId,
+    visibleItems.map((row) => row.item.id)
+  );
+
   // Build QueuePlanItems with executionState and prerequisites
   function toQueueItem(row: ResolvedPlanItem): QueuePlanItem {
     return {
       ...row,
+      resources: resolveItemResources(row.item, resourcesByItem, row.status),
       executionState: deriveExecutionState({
         plannedDate: row.item.date,
         today: date,

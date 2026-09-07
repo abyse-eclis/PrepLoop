@@ -36,6 +36,8 @@ export interface ExportPlanItemRow {
   planVersionNumber: number | null;
   stableExternalId: string;
   subject: string;
+  /** Learning topic; falls back to instructions on legacy items. */
+  topic: string;
   courseCode: string | null;
   activityType: string;
   lessonFrom: string | null;
@@ -48,9 +50,35 @@ export interface ExportPlanItemRow {
   instructions: string | null;
   resourceUrl?: string | null;
   resourceLabel?: string | null;
+  /** Paid/free resources, counted per tier — never merged into one number. */
+  paidResources?: number;
+  freeResources?: number;
+  paidResourcesCompleted?: number;
+  freeResourcesCompleted?: number;
+  resources?: ExportResourceRow[];
   assessmentSourceId?: string | null;
   reviewReferenceIds?: string[] | null;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface ExportResourceRow {
+  id: string;
+  tier: string;
+  type: string;
+  provider: string | null;
+  title: string;
+  url: string | null;
+  courseCode: string | null;
+  lessonFrom: string | null;
+  lessonTo: string | null;
+  durationMinutes: number | null;
+  status: string;
+  accessType: string | null;
+  expiresAt: string | null;
+  limitedWatchTime: boolean;
+  listenMode: boolean;
+  /** true while the resource is still only described by legacy item columns. */
+  legacy: boolean;
 }
 
 export interface ExportDayRow {

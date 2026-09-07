@@ -47,6 +47,8 @@ export interface PlanItem {
   scheduled_at: string | null;
   stable_external_id: string;
   subject: string;
+  /** Learning topic of the item; outranks course_code in the UI. */
+  topic?: string | null;
   course_code: string | null;
   lesson_from: string | null;
   lesson_to: string | null;
@@ -60,6 +62,36 @@ export interface PlanItem {
   review_reference_ids: string[] | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+/**
+ * A learning resource attached to a plan item (paid course or free source).
+ * Mutable: `status` is execution data, like item_status_overrides.
+ */
+export interface StudyResourceRow {
+  id: string;
+  workspace_id: string;
+  study_plan_item_id: string;
+  tier: string;
+  type: string;
+  provider: string | null;
+  title: string;
+  url: string | null;
+  course_code: string | null;
+  lesson_from: string | null;
+  lesson_to: string | null;
+  duration_minutes: number | null;
+  status: string;
+  access_type: string | null;
+  expires_at: string | null;
+  limited_watch_time: boolean;
+  listen_mode: boolean;
+  sort_order: number;
+  /** Set only on rows materialised from an item's legacy columns. */
+  legacy_key: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PlanDay {

@@ -8,6 +8,7 @@ import { executionHistorySchema } from "./execution-history";
 export * from "./common";
 export * from "./workspace-config";
 export * from "./learning-source";
+export * from "./study-resource";
 export * from "./study-plan";
 export * from "./recovery";
 export * from "./execution-history";

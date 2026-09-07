@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { ItemStatusOverride, PlanItem, StudySession } from "@/types/db";
 import { subjectLabel } from "@/lib/subjects";
 import { activityLabel } from "@/lib/status";
+import { planItemTopic, lessonRangeText } from "@/lib/plans/topic";
 import { Combobox } from "@/components/ui/combobox";
 
 const terminal = new Set(["completed", "cancelled"]);
@@ -32,7 +33,7 @@ export function PlanSchedule({ items, overrides = [], sessions = [] }: {
         const marker = status === "completed" ? "✓" : isCurrent ? "→" : status === "cancelled" ? "—" : "○";
         return <div key={item.id} className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${isCurrent ? "bg-accent/60" : ""}`}>
           <span className="w-5 text-center font-semibold" aria-hidden>{marker}</span><span className="w-12 tabular-nums text-muted-foreground">#{item.order_index}</span>
-          <div className="min-w-0 flex-1"><div className="font-medium">{subjectLabel(item.subject)}{item.course_code ? ` · ${item.course_code}` : ""}{item.lesson_from ? ` (${item.lesson_from}${item.lesson_to && item.lesson_to !== item.lesson_from ? `–${item.lesson_to}` : ""})` : ""}</div><div className="text-xs text-muted-foreground">{activityLabel(item.activity_type)}{isCurrent ? " · กำลังเรียน" : status === "completed" ? " · เสร็จแล้ว" : " · Upcoming"}{item.scheduled_at ? ` · กำหนด ${new Date(item.scheduled_at).toLocaleString("th-TH")}` : ""}</div></div>
+          <div className="min-w-0 flex-1"><div className="font-medium">{planItemTopic(item)}</div><div className="text-xs text-muted-foreground">{subjectLabel(item.subject)} · {activityLabel(item.activity_type)}{item.course_code ? ` · ${item.course_code}` : ""}{lessonRangeText(item) ? ` · ${lessonRangeText(item)}` : ""}{isCurrent ? " · กำลังเรียน" : status === "completed" ? " · เสร็จแล้ว" : " · Upcoming"}{item.scheduled_at ? ` · กำหนด ${new Date(item.scheduled_at).toLocaleString("th-TH")}` : ""}</div></div>
           <span className="tabular-nums text-muted-foreground">{actual} / {item.target_minutes} นาที</span>
         </div>;
       })}

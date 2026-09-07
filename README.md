@@ -144,12 +144,62 @@ SELECT/INSERT/DELETE — ไม่มี update flow ในระดับ appli
 
 - `workspace-config.example.json`
 - `learning-source-catalog.example.json`
-- `study-plan.example.json` (7 วัน)
+- `study-plan.example.json` (7 วัน · รูปแบบเดิม)
+- `study-plan-hybrid-resources.example.json` (แผนที่มีแหล่งเรียนแบบ 2 ฝั่ง)
 - `recovery-plan.example.json`
 
 ลำดับการใช้งาน: Import Workspace Config → Import Learning Source → (อัปโหลดไฟล์) → Import Study Plan → เปิดใช้ Plan V1 ที่หน้า `/plan`
 
 ข้อมูลย้อนหลังวันที่ 1–2 ส.ค. 2026 กรอกได้ที่หน้า `/history` (เลือกวันที่ แล้วเพิ่ม session/ผลสอบ)
+
+## Hybrid Learning Resources (คอร์สที่ซื้อมา / คอร์สฟรี)
+
+แต่ละรายการในแผนคือ "หัวข้อที่จะเรียน" (`topic`) และมีแหล่งเรียนได้หลายแหล่ง แบ่งเป็น 2 ฝั่ง:
+**คอร์สที่ซื้อมา** (`tier: "PAID"`) กับ **คอร์สฟรี** (`tier: "FREE"`)
+บนจอกว้างแสดงเป็น 2 คอลัมน์ บนมือถือเรียงลงมาโดยคอร์สที่ซื้อมาอยู่บน
+
+PrepLoop เก็บเฉพาะ "ลิงก์และสถานะ" เท่านั้น ทุกลิงก์เปิดแท็บใหม่ — ไม่มีการฝังวิดีโอ ไม่มี player
+และไม่ติดตาม playback
+
+```jsonc
+{
+  "stableExternalId": "2026-09-01-physics-kinematics",
+  "subject": "PHYSICS",
+  "topic": "การเคลื่อนที่แนวตรง",
+  "activityType": "course",
+  "targetMinutes": 75,
+  "resources": [
+    {
+      "tier": "PAID",              // PAID | FREE                 (บังคับ)
+      "type": "COURSE",            // COURSE|YOUTUBE|DOCUMENT|WEBSITE|PRACTICE|MOCK (บังคับ)
+      "title": "พิชิตกลศาสตร์",     // (บังคับ)
+      "provider": "SmartMathPro",
+      "courseCode": "X003",
+      "lessonFrom": "032",
+      "lessonTo": "035",
+      "accessType": "EXPIRING",    // EXPIRING|LIMITED_HOURS|FREE|PERMANENT
+      "expiresAt": "2027-07-10",
+      "limitedWatchTime": false,
+      "status": "NOT_STARTED"      // NOT_STARTED|LISTENED|IN_PROGRESS|COMPLETED|REVIEW_REQUIRED
+    },
+    {
+      "tier": "FREE",
+      "type": "YOUTUBE",
+      "title": "การเคลื่อนที่แนวตรง",
+      "url": "https://...",
+      "durationMinutes": 28,
+      "listenMode": true           // แค่ป้ายบอกว่า "เหมาะสำหรับเปิดฟัง" ไม่มี audio player
+    }
+  ]
+}
+```
+
+- **สถานะแยกกันทุกแหล่ง** — "ฟังผ่านแล้ว" (`LISTENED`) ไม่เท่ากับ "เรียนแล้ว" (`COMPLETED`)
+  และไม่เปลี่ยนสถานะของหัวข้อหรือของคอร์สที่ซื้อมา ความคืบหน้าของฝั่ง Paid กับ Free ไม่ถูกรวมกัน
+- **แผนเดิมยังนำเข้าได้เหมือนเดิม** — รายการที่ไม่มี `resources[]` จะถูกอ่านจาก
+  `courseCode` / `resourceUrl` เดิมแล้วแสดงเป็นการ์ดให้อัตโนมัติ (courseCode → คอร์สที่ซื้อมา,
+  ลิงก์ YouTube → คอร์สฟรี) โดยไม่ต้อง migrate ข้อมูล และจะเขียนลงตาราง `study_resources`
+  ก็ต่อเมื่อผู้ใช้เปลี่ยนสถานะหรือเพิ่มแหล่งเรียนเอง
 
 ## Known MVP Limitations
 
