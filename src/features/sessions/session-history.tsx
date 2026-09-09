@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -66,7 +65,6 @@ function SessionEditor({
   item?: PlanItem;
   compact?: boolean;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [sessionDate, setSessionDate] = useState(session.session_date);
   const [startTime, setStartTime] = useState(session.start_time ?? "");
@@ -95,7 +93,6 @@ function SessionEditor({
         return;
       }
       setEditing(false);
-      router.refresh();
     });
   }
 
@@ -115,7 +112,6 @@ function SessionEditor({
         setError(res.error ?? "ลบไม่สำเร็จ");
         return;
       }
-      router.refresh();
     });
   }
 

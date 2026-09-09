@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -29,7 +30,14 @@ const NAV = [
   { href: "/settings", label: "ตั้งค่า", icon: Settings },
 ] as const;
 
-export function AppNav() {
+/**
+ * Persistent navigation. Memoised so it only re-renders when the pathname
+ * changes — never because a page below it re-rendered. Every link keeps the
+ * default prefetch (the route's loading boundary is fetched when the link is
+ * visible), so a click paints the skeleton instantly while the dynamic page
+ * streams in.
+ */
+export const AppNav = memo(function AppNav() {
   const pathname = usePathname();
   return (
     <>
@@ -88,4 +96,4 @@ export function AppNav() {
       </nav>
     </>
   );
-}
+});

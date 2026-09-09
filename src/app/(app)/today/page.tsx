@@ -25,7 +25,7 @@ export default async function TodayPage() {
   }
 
   const today = todayInTimezone(workspace.timezone);
-  const queue = await getStudyQueue(workspace.id, today);
+  const queue = await getStudyQueue(workspace.id, today, workspace.timezone);
 
   return (
     <TodayView

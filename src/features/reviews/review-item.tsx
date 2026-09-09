@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -10,7 +9,6 @@ import { subjectLabel } from "@/lib/subjects";
 import type { ReviewTask } from "@/types/db";
 
 export function ReviewItem({ review }: { review: ReviewTask }) {
-  const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
   const [result, setResult] = useState(review.result ?? "");
@@ -29,7 +27,6 @@ export function ReviewItem({ review }: { review: ReviewTask }) {
           variant: "success",
           title: status === "done" ? "บันทึกการทบทวนแล้ว" : "ข้ามการทบทวนแล้ว",
         });
-        router.refresh();
       } else {
         toast({ variant: "error", title: "บันทึกไม่สำเร็จ", description: res.error });
       }

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { publicEnv, serverEnv } from "@/lib/env";
@@ -5,8 +6,11 @@ import { publicEnv, serverEnv } from "@/lib/env";
 /**
  * Server-side Supabase client bound to the request cookies (RLS-enforced,
  * acts as the signed-in user).
+ *
+ * Wrapped in React `cache()` so one render request (layout + page + nested
+ * data loaders) shares a single client instead of re-creating it per call.
  */
-export async function createServerSupabase() {
+export const createServerSupabase = cache(async function createServerSupabase() {
   const cookieStore = await cookies();
   return createServerClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
     cookies: {
@@ -24,7 +28,7 @@ export async function createServerSupabase() {
       },
     },
   });
-}
+});
 
 /**
  * Service-role client for privileged server operations (e.g. signed URLs,

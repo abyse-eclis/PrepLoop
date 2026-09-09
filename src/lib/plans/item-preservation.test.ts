@@ -187,7 +187,7 @@ describe("item-preservation", () => {
       const incoming = {
         stableExternalId: source.stable_external_id,
         subject: source.subject,
-        instructions: source.instructions,
+        instructions: source.instructions ?? "",
         targetMinutes: 45, // rearranged by recovery
       };
 

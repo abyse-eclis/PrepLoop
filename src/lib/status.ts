@@ -10,6 +10,7 @@ export const STATUS_LABELS: Record<PlanItemStatus, string> = {
   recovery: "Recovery",
   skipped: "ข้าม (ไม่เรียนแล้ว)",
   cancelled: "ยกเลิกตามแผนใหม่",
+  deferred: "ถัดไป (เลื่อนไว้ก่อน)",
 };
 
 export const STATUS_CLASS: Record<PlanItemStatus, string> = {
@@ -22,6 +23,7 @@ export const STATUS_CLASS: Record<PlanItemStatus, string> = {
   recovery: "status-recovery",
   skipped: "status-skipped",
   cancelled: "status-cancelled",
+  deferred: "status-deferred",
 };
 
 export const ACTIVITY_LABELS: Record<string, string> = {

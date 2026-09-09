@@ -7,41 +7,12 @@ import { getActiveWorkspace } from "@/lib/auth/workspace";
 import { validateIntervals } from "@/lib/dates";
 import { planItemStatusEnum, timeString, dateString } from "@/lib/schemas/common";
 import { statusFromActualMinutes } from "@/lib/study-execution";
+import { ensureDailySnapshot, ownedPlanItem } from "@/features/sessions/plan-item-db";
 
 export interface ActionResult {
   ok: boolean;
   error?: string;
   message?: string;
-}
-
-async function ensureDailySnapshot(workspaceId: string, planItemId: string, reason: string) {
-  const supabase = await createServerSupabase();
-  const { data: item } = await supabase.from("study_plan_items").select("plan_version_id, date").eq("id", planItemId).eq("workspace_id", workspaceId).maybeSingle();
-  if (!item) return;
-  const { data: existing } = await supabase.from("daily_plan_snapshots").select("id").eq("workspace_id", workspaceId).eq("snapshot_date", item.date).maybeSingle();
-  if (existing) return;
-  const { data: items } = await supabase.from("study_plan_items").select("id, stable_external_id, subject, course_code, lesson_from, lesson_to, activity_type, target_minutes, priority, instructions").eq("workspace_id", workspaceId).eq("plan_version_id", item.plan_version_id).eq("date", item.date).order("priority", { ascending: true });
-  await supabase.from("daily_plan_snapshots").insert({ workspace_id: workspaceId, snapshot_date: item.date, plan_version_id: item.plan_version_id, payload: { items: items ?? [] }, started_reason: reason });
-}
-
-async function ownedPlanItem(planItemId: string, workspaceId: string) {
-  const supabase = await createServerSupabase();
-  const { data } = await supabase
-    .from("study_plan_items")
-    .select("id, workspace_id, subject, date, lesson_from, lesson_to, target_minutes, stable_external_id")
-    .eq("id", planItemId)
-    .maybeSingle();
-  if (!data || data.workspace_id !== workspaceId) return null;
-  return data as {
-    id: string;
-    workspace_id: string;
-    subject: string;
-    date: string;
-    lesson_from: string | null;
-    lesson_to: string | null;
-    target_minutes: number;
-    stable_external_id: string | null;
-  };
 }
 
 async function recomputePlanItemStatus(
@@ -167,7 +138,7 @@ export async function addTimeIntervals(
     };
   });
 
-  await ensureDailySnapshot(workspace.id, item.id, "study_session");
+  await ensureDailySnapshot(workspace.id, item, "study_session");
   const { error } = await supabase.from("study_sessions").insert(rows);
   if (error) return { ok: false, error: error.message };
 
@@ -199,7 +170,7 @@ export async function setItemStatus(
   if (!item) return { ok: false, error: "ไม่พบรายการหรือไม่มีสิทธิ์เข้าถึง" };
 
   const supabase = await createServerSupabase();
-  await ensureDailySnapshot(workspace.id, item.id, "status_change");
+  await ensureDailySnapshot(workspace.id, item, "status_change");
   const { error } = await supabase.from("item_status_overrides").upsert(
     {
       workspace_id: workspace.id,
@@ -238,7 +209,7 @@ export async function setItemsStatus(
   const supabase = await createServerSupabase();
   const { data: itemRows, error: itemError } = await supabase
     .from("study_plan_items")
-    .select("id, workspace_id, date, lesson_from, lesson_to")
+    .select("id, workspace_id, date, lesson_from, lesson_to, plan_version_id")
     .in("id", ids)
     .eq("workspace_id", workspace.id);
   if (itemError) return { ok: false, error: itemError.message };
@@ -250,6 +221,7 @@ export async function setItemsStatus(
       date: string;
       lesson_from: string | null;
       lesson_to: string | null;
+      plan_version_id: string;
     }> | null) ?? [];
   if (items.length !== ids.length) {
     return { ok: false, error: "ไม่พบบางรายการหรือไม่มีสิทธิ์เข้าถึง" };
@@ -261,7 +233,7 @@ export async function setItemsStatus(
   for (const item of items) {
     if (seenDates.has(item.date)) continue;
     seenDates.add(item.date);
-    await ensureDailySnapshot(workspace.id, item.id, "status_change");
+    await ensureDailySnapshot(workspace.id, item, "status_change");
   }
 
   const { error } = await supabase.from("item_status_overrides").upsert(
