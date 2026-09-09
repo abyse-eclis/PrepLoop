@@ -12,7 +12,8 @@ export type ExecutionState =
   | "needs_review"
   | "recovery"
   | "skipped"
-  | "cancelled";
+  | "cancelled"
+  | "deferred";
 
 export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
   not_started: "ยังไม่เริ่ม",
@@ -26,6 +27,7 @@ export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
   recovery: "Recovery",
   skipped: "ข้ามแล้ว",
   cancelled: "ยกเลิกตามแผนใหม่",
+  deferred: "ถัดไป (เลื่อนไว้ก่อน)",
 };
 
 export const EXECUTION_STATE_CLASS: Record<ExecutionState, string> = {
@@ -40,6 +42,7 @@ export const EXECUTION_STATE_CLASS: Record<ExecutionState, string> = {
   recovery: "status-recovery",
   skipped: "status-skipped",
   cancelled: "status-cancelled",
+  deferred: "status-deferred",
 };
 
 export function actualMinutesFromSessions(
@@ -85,6 +88,7 @@ export function deriveExecutionState(input: {
 
   if (input.status === "cancelled") return "cancelled";
   if (input.status === "skipped") return "skipped";
+  if (input.status === "deferred") return "deferred";
   if (input.status === "recovery") return "recovery";
   if (input.status === "needs_review") return "needs_review";
   if (input.status === "paused") return "paused";

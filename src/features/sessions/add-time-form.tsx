@@ -8,7 +8,6 @@ import { Alert } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
 import { addTimeIntervals } from "./actions";
 import { validateIntervals } from "@/lib/dates";
-import { useRouter } from "next/navigation";
 
 interface Interval {
   start: string;
@@ -24,7 +23,6 @@ export function AddTimeForm({
   sessionDate: string;
   onDone?: () => void;
 }) {
-  const router = useRouter();
   const { toast } = useToast();
   const [intervals, setIntervals] = useState<Interval[]>([
     { start: "", end: "" },
@@ -63,7 +61,6 @@ export function AddTimeForm({
       setIntervals([{ start: "", end: "" }]);
       setNote("");
       toast({ variant: "success", title: "บันทึกเวลาแล้ว", description: res.message });
-      router.refresh();
       onDone?.();
     });
   }

@@ -89,8 +89,8 @@ export const STUDY_SESSION_COLUMNS = [
   "updated_at",
 ].join(",");
 
-const STATUS_OVERRIDE_COLUMNS =
-  "id, plan_item_id, status, actual_lesson_from, actual_lesson_to";
+export const STATUS_OVERRIDE_COLUMNS =
+  "id, plan_item_id, status, actual_lesson_from, actual_lesson_to, notes, completed_at, deferred_at, deferred_from_date, updated_at";
 
 export interface ResolvedPlanItem {
   item: PlanItem;
@@ -239,14 +239,21 @@ export async function getPlanItemByExternalId(
   return (data as PlanItem | null) ?? null;
 }
 
-export async function resolvePlanItems(
-  workspaceId: string,
-  items: PlanItem[]
-): Promise<ResolvedPlanItem[]> {
-  if (items.length === 0) return [];
+/** Workspace-wide execution data every plan-item resolution needs. */
+export interface PlanExecutionData {
+  overrides: ItemStatusOverride[];
+  sessions: StudySession[];
+}
 
+/**
+ * Load all status overrides and study sessions of a workspace in ONE parallel
+ * round-trip. Callers that already need this data for other purposes (the
+ * Today page) load it once up-front and pass it to `resolvePlanItems`.
+ */
+export async function getPlanExecutionData(
+  workspaceId: string
+): Promise<PlanExecutionData> {
   const supabase = await createServerSupabase();
-
   const [{ data: overrides }, { data: sessions }] = await Promise.all([
     supabase
       .from("item_status_overrides")
@@ -259,31 +266,47 @@ export async function resolvePlanItems(
       .order("session_date", { ascending: true })
       .order("start_time", { ascending: true }),
   ]);
+  return {
+    overrides: (overrides as ItemStatusOverride[] | null) ?? [],
+    sessions: (sessions as StudySession[] | null) ?? [],
+  };
+}
 
-  const allOverrides = (overrides as ItemStatusOverride[] | null) ?? [];
-  const allSessions = (sessions as StudySession[] | null) ?? [];
-
+/** Plan items across all versions referenced by sessions/overrides. */
+export async function getHistoricalPlanItemRefs(
+  workspaceId: string,
+  execution: PlanExecutionData
+): Promise<Array<{ id: string; stable_external_id: string | null }>> {
   const referencedIds = [
     ...new Set([
-      ...allSessions.map((s) => s.plan_item_id).filter(Boolean),
-      ...allOverrides.map((o) => o.plan_item_id).filter(Boolean),
+      ...execution.sessions.map((s) => s.plan_item_id).filter(Boolean),
+      ...execution.overrides.map((o) => o.plan_item_id).filter(Boolean),
     ]),
   ] as string[];
+  if (referencedIds.length === 0) return [];
+  const supabase = await createServerSupabase();
+  const { data } = await supabase
+    .from("study_plan_items")
+    .select("id, stable_external_id")
+    .eq("workspace_id", workspaceId)
+    .in("id", referencedIds);
+  return (data as Array<{ id: string; stable_external_id: string | null }> | null) ?? [];
+}
 
-  let historicalRows: Array<{ id: string; stable_external_id: string | null }> = [];
-  if (referencedIds.length > 0) {
-    const { data: hist } = await supabase
-      .from("study_plan_items")
-      .select("id, stable_external_id")
-      .eq("workspace_id", workspaceId)
-      .in("id", referencedIds);
-    historicalRows = (hist as Array<{ id: string; stable_external_id: string | null }> | null) ?? [];
-  }
+export async function resolvePlanItems(
+  workspaceId: string,
+  items: PlanItem[],
+  preloaded?: PlanExecutionData
+): Promise<ResolvedPlanItem[]> {
+  if (items.length === 0) return [];
+
+  const execution = preloaded ?? (await getPlanExecutionData(workspaceId));
+  const historicalRows = await getHistoricalPlanItemRefs(workspaceId, execution);
 
   return resolvePlanItemsProgress(
     items,
-    allSessions,
-    allOverrides,
+    execution.sessions,
+    execution.overrides,
     historicalRows
   );
 }

@@ -78,6 +78,12 @@ export interface ItemStatusOverride {
   status: PlanItemStatus;
   actual_lesson_from: string | null;
   actual_lesson_to: string | null;
+  /** Learner note (plan items are immutable, so it lives here). */
+  notes?: string | null;
+  completed_at?: string | null;
+  deferred_at?: string | null;
+  deferred_from_date?: string | null;
+  updated_at?: string;
 }
 
 export interface StudySession {
@@ -239,9 +245,20 @@ export interface CustomStudyItem {
   url: string | null;
   estimated_minutes: number | null;
   notes: string | null;
-  status: "not_started" | "studying" | "paused" | "completed";
+  status: CustomStudyStatus;
+  completed_at?: string | null;
+  deferred_at?: string | null;
+  deferred_from_date?: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type CustomStudyStatus =
+  | "not_started"
+  | "studying"
+  | "paused"
+  | "completed"
+  | "skipped"
+  | "deferred";
 
 

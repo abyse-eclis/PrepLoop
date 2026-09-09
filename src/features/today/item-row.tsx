@@ -14,7 +14,6 @@ import {
   Play,
   SkipForward,
   Undo2,
-  Zap,
 } from "lucide-react";
 import type { ResolvedPlanItem } from "@/features/plans/data";
 import { subjectLabel } from "@/lib/subjects";
@@ -23,7 +22,6 @@ import { Badge, Progress } from "@/components/ui/misc";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { setItemStatus } from "@/features/sessions/actions";
-import { studyNow } from "@/features/today/actions";
 import { AddTimeForm } from "@/features/sessions/add-time-form";
 import { SessionHistoryPanel } from "@/features/sessions/session-history";
 import type { PlanItemStatus } from "@/lib/schemas/common";
@@ -75,14 +73,6 @@ export function ItemRow({
     startTransition(async () => {
       const res = await setItemStatus({ planItemId: item.id, status });
       if (!res.ok) setError(res.error ?? "เกิดข้อผิดพลาด");
-    });
-  }
-
-  function handleStudyNow() {
-    setError(null);
-    startTransition(async () => {
-      const res = await studyNow({ planItemId: item.id, date });
-      if (!res.ok) setError(res.error ?? "เกิดข้อผิดพลาดในการเริ่มเรียน");
     });
   }
 
@@ -244,26 +234,6 @@ export function ItemRow({
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {/* "เรียนตอนนี้" (Study Now) button */}
-          <Button
-            size={isHero ? "default" : "sm"}
-            variant={isStudying ? "secondary" : "default"}
-            disabled={pending || isBlocked || isSkipped}
-            onClick={handleStudyNow}
-            title={
-              isBlocked
-                ? prerequisiteStatus?.reason
-                : "เริ่มเรียนรายการนี้และบันทึกเวลาเรียนทันที"
-            }
-          >
-            <Zap className="h-4 w-4 mr-1" />
-            {isStudying
-              ? "กำลังเรียนอยู่"
-              : isHero
-                ? "เรียนตอนนี้"
-                : "เรียนตอนนี้"}
-          </Button>
-
           <Button
             size={isHero ? "default" : "sm"}
             variant="secondary"

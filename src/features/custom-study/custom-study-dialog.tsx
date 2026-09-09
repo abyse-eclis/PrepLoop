@@ -27,7 +27,8 @@ interface CustomStudyDialogProps {
   onOpenChange: (open: boolean) => void;
   date: string;
   item?: CustomStudyItem | null;
-  onSuccess?: () => void;
+  /** Called with the created/updated row so the caller can update its state. */
+  onSaved?: (item: CustomStudyItem) => void;
 }
 
 export function CustomStudyDialog({
@@ -35,7 +36,7 @@ export function CustomStudyDialog({
   onOpenChange,
   date,
   item,
-  onSuccess,
+  onSaved,
 }: CustomStudyDialogProps) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -140,7 +141,7 @@ export function CustomStudyDialog({
         if (res.ok) {
           toast({ variant: "success", title: "แก้ไขการเรียนเองเรียบร้อยแล้ว" });
           onOpenChange(false);
-          onSuccess?.();
+          if (res.item) onSaved?.(res.item);
         } else {
           setError(res.error ?? "เกิดข้อผิดพลาด");
         }
@@ -159,7 +160,7 @@ export function CustomStudyDialog({
         if (res.ok) {
           toast({ variant: "success", title: "เพิ่มการเรียนเองแล้ว" });
           onOpenChange(false);
-          onSuccess?.();
+          if (res.item) onSaved?.(res.item);
         } else {
           setError(res.error ?? "เกิดข้อผิดพลาด");
         }

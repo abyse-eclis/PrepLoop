@@ -36,9 +36,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Local JWT verification (asymmetric signing keys, JWKS cached) instead of a
+  // network round-trip to the Auth server on every navigation. Legacy HS256
+  // projects fall back to a server check inside getClaims() itself.
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims?.sub ? { id: claims.claims.sub } : null;
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
